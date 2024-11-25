@@ -9,6 +9,8 @@ from timeit import default_timer
 import matplotlib.pyplot as plt
 import os
 
+os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+
 torch.manual_seed(0)
 np.random.seed(0)
 
@@ -34,7 +36,7 @@ class SpectralConv3d(nn.Module):
 
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.modes1 = modes1  #Number of Fourier modes to multiply, at most floor(N/2) + 1
+        self.modes1 = modes1  # Number of Fourier modes to multiply, at most floor(N/2) + 1
         self.modes2 = modes2
         self.modes3 = modes3
 
@@ -59,7 +61,7 @@ class SpectralConv3d(nn.Module):
 
     def forward(self, x):
         batchsize = x.shape[0]
-        #Compute Fourier coeffcients up to factor of e^(- something constant)
+        # Compute Fourier coeffcients up to factor of e^(- something constant)
         x_ft = torch.fft.rfftn(x, dim=[-3, -2, -1])
 
         # Multiply relevant Fourier modes
@@ -74,7 +76,7 @@ class SpectralConv3d(nn.Module):
         out_ft[:, :, -self.modes1:, -self.modes2:, :self.modes3] = \
             self.compl_mul3d(x_ft[:, :, -self.modes1:, -self.modes2:, :self.modes3], self.weights4)
 
-        #Return to physical space
+        # Return to physical space
         x = torch.fft.irfftn(out_ft, s=(x.size(-3), x.size(-2), x.size(-1)))
         return x
 
@@ -115,7 +117,8 @@ class FNO3d(nn.Module):
         self.width = width
         self.padding = 6  # pad the domain if input is non-periodic
 
-        self.p = nn.Linear(in_channel, self.width)  # input channel is 12: the solution of the first 10 timesteps + 3 locations (u(1, x, y), ..., u(10, x, y),  x, y, t)
+        self.p = nn.Linear(in_channel,
+                           self.width)  # input channel is 12: the solution of the first 10 timesteps + 3 locations (u(1, x, y), ..., u(10, x, y),  x, y, t)
         self.conv0 = SpectralConv3d(self.width, self.width, self.modes1, self.modes2, self.modes3)
         self.conv1 = SpectralConv3d(self.width, self.width, self.modes1, self.modes2, self.modes3)
         self.conv2 = SpectralConv3d(self.width, self.width, self.modes1, self.modes2, self.modes3)
@@ -250,12 +253,6 @@ else:
     test_u_mat = reader.read_field('phi')
     test_a = test_a_mat[-ntest:, :T_in, ::sub, ::sub]
     test_u = test_u_mat[-ntest:, T_in:T + T_in, ::sub, ::sub]
-    test_a = test_a.permute(0, 2, 3, 1)
-    test_u = test_u.permute(0, 2, 3, 1)
-
-    reader = MatReader(TEST_PATH)
-    test_a = reader.read_field('phi')[-ntest:, :T_in, ::sub, ::sub]
-    test_u = reader.read_field('phi')[-ntest:, T_in:T + T_in, ::sub, ::sub]
     test_a = test_a.permute(0, 2, 3, 1)
     test_u = test_u.permute(0, 2, 3, 1)
 
@@ -461,4 +458,3 @@ for T_index in range(pred.shape[-1]):
     plt.gca().set_aspect('equal', adjustable='box')
     plt.title(f'Predicted Value at T_index = {T_index}')
     plt.show()
-
