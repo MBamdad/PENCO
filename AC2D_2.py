@@ -9,13 +9,13 @@ from timeit import default_timer
 import matplotlib.pyplot as plt
 import os
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+os.environ['CUDA_VISIBLE_DEVICES'] = '3'
 
 torch.manual_seed(0)
 np.random.seed(0)
 
-#device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-device = 'cpu'
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# device = 'cpu'
 print("Device name:")
 print(device)
 if torch.cuda.is_available():
@@ -82,20 +82,22 @@ class SpectralConv3d(nn.Module):
 
 
 class MLP(nn.Module):
-    def __init__(self, in_channels, out_channels, mid_channels):
+    def __init__(self, in_channels, out_channels, mid_channels, T=1):
         super(MLP, self).__init__()
-        self.mlp1 = nn.Conv3d(in_channels, mid_channels, 1)
-        self.mlp2 = nn.Conv3d(mid_channels, out_channels, 1)
+        self.layers = nn.ModuleList()
+        for _ in range(T):
+            self.layers.append(nn.Conv3d(in_channels, mid_channels, 1))
+            self.layers.append(nn.Conv3d(mid_channels, out_channels, 1))
 
-    def forward(self, x):
-        x = self.mlp1(x)
+    def forward(self, x, t=1):
+        x = self.layers[2 * (t - 1)](x)
         x = F.gelu(x)
-        x = self.mlp2(x)
+        x = self.layers[2 * (t - 1) + 1](x)
         return x
 
 
 class FNO3d(nn.Module):
-    def __init__(self, modes1, modes2, modes3, width, in_channel):
+    def __init__(self, modes1, modes2, modes3, width, in_channel, T=1):
         super(FNO3d, self).__init__()
 
         """
@@ -104,7 +106,7 @@ class FNO3d(nn.Module):
         2. 4 layers of the integral operators u' = (W + K)(u).
             W defined by self.w; K defined by self.conv .
         3. Project from the channel space to the output space by self.fc1 and self.fc2 .
-        
+
         input: the solution of the first 10 timesteps + 3 locations (u(1, x, y), ..., u(10, x, y),  x, y, t). It's a constant function in time, except for the last index.
         input shape: (batchsize, x=64, y=64, t=40, c=13)
         output: the solution of the next 40 timesteps
@@ -131,9 +133,9 @@ class FNO3d(nn.Module):
         self.w1 = nn.Conv3d(self.width, self.width, 1)
         self.w2 = nn.Conv3d(self.width, self.width, 1)
         self.w3 = nn.Conv3d(self.width, self.width, 1)
-        self.q = MLP(self.width, 1, self.width * 4)  # output channel is 1: u(x, y)
+        self.q = MLP(self.width, 1, self.width * 4, T)  # output channel is 1: u(x, y)
 
-    def forward(self, x):
+    def forward(self, x, t):
         grid = self.get_grid(x.shape, x.device)
         x = torch.cat((x, grid), dim=-1)
         x = self.p(x)
@@ -164,8 +166,8 @@ class FNO3d(nn.Module):
         x = x1 + x2
 
         x = x[..., :-self.padding]
-        x = self.q(x)
-        #x = F.tanh(x)
+        x = self.q(x, t)
+        # x = F.tanh(x)
         if classified:
             x = torch.sign(x)
 
@@ -192,9 +194,9 @@ ntest = 200
 modes = 8
 width = 20
 
-batch_size = 10  #10
+batch_size = 5  # 10
 
-learning_rate = 0.0001  #0.001
+learning_rate = 0.0001  # 0.001
 weight_decay = 1e-4
 epochs = 1000
 iterations = epochs * (ntrain // batch_size)
@@ -210,13 +212,13 @@ sub = 1
 O = 64
 S = O // sub
 T_in = 1
-T = 140
+T = 20#40
 
 ################################################################
 # load data
 ################################################################
 model_dir = './models'
-model_filename = f'AC2D_model_S{S}_T{T_in}to_{T}_batch{batch_size}.pt'
+model_filename = f'AC2D_2_model_S{S}_T{T_in}to_{T}_batch{batch_size}.pt'
 model_path = os.path.join(model_dir, model_filename)
 
 os.makedirs(model_dir, exist_ok=True)
@@ -292,12 +294,11 @@ test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a,
 t2 = default_timer()
 
 print('preprocessing finished, time used:', t2 - t1)
-device = torch.device('cuda')
 
 ################################################################
 # training and evaluation
 ################################################################
-model = FNO3d(modes, modes, modes, width, T_in + 3).to(device)
+model = FNO3d(modes, modes, modes, width, T_in + 3, T).to(device)
 if os.path.exists(model_path):
     print(f"Loading pre-trained model from {model_path}")
     model.load_state_dict(torch.load(model_path))
@@ -325,17 +326,21 @@ if training:
         train_l2 = 0
         for x, y in train_loader:
             x, y = x.to(device), y.to(device)
-
+            T = y.shape[-1]
             optimizer.zero_grad()
-            out = model(x).view(batch_size, S, S, T)
+            l2 = 0.0
+            mse = 0.0
+            for t in range(T):
+                out = model(x, t).view(batch_size, S, S, T)
 
-            mse = F.mse_loss(out, y, reduction='mean')
-            # mse.backward()
+                mse += F.mse_loss(out, y, reduction='mean')
+                # mse.backward()
 
-            if normalized:
-                y = y_normalizer.decode(y)
-                out = y_normalizer.decode(out)
-            l2 = myloss(out.view(batch_size, -1), y.view(batch_size, -1))
+                if normalized:
+                    y = y_normalizer.decode(y)
+                    out = y_normalizer.decode(out)
+                l2 += myloss(out.view(batch_size, -1), y.view(batch_size, -1))
+
             l2.backward()
 
             optimizer.step()
@@ -348,12 +353,14 @@ if training:
         with torch.no_grad():
             for x, y in test_loader:
                 x, y = x.to(device), y.to(device)
-
-                out = model(x).view(batch_size, S, S, T)
-                if normalized:
-                    out = y_normalizer.decode(out)
-                test_l2 += myloss(out.view(batch_size, -1), y.view(batch_size, -1)).item()
-
+                T = y.shape[-1]
+                l2 = 0.0
+                for t in range(T):
+                    out = model(x, t).view(batch_size, S, S, T)
+                    if normalized:
+                        out = y_normalizer.decode(out)
+                    l2 += myloss(out.view(batch_size, -1), y.view(batch_size, -1)).item()
+                test_l2 += l2
         train_mse /= len(train_loader)
         train_l2 /= ntrain
         test_l2 /= ntest
@@ -450,11 +457,3 @@ plt.colorbar()
 plt.gca().set_aspect('equal', adjustable='box')
 plt.title('Error')
 plt.show()
-
-for T_index in range(pred.shape[-1]):
-    u_pred = pred[index, :, :, T_index]
-    plt.contourf(x_test_plot, y_test_plot, u_pred, levels=500, cmap='hsv')
-    plt.colorbar()
-    plt.gca().set_aspect('equal', adjustable='box')
-    plt.title(f'Predicted Value at T_index = {T_index}')
-    plt.show()

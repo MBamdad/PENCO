@@ -9,7 +9,7 @@ import os
 import matplotlib.pyplot as plt
 import cv2
 
-#os.environ['CUDA_VISIBLE_DEVICES'] = '3'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 torch.manual_seed(0)
 np.random.seed(0)
@@ -172,14 +172,15 @@ class FNO2d(nn.Module):
 ntrain = 1000
 ntest = 100
 
-batch_size = 50
+
+batch_size = 10#40
 learning_rate = 0.001
 weight_decay = 1e-4
 epochs = 100#500
 iterations = epochs * (ntrain // batch_size)
 
-modes = 12
-width = 32
+modes = 8
+width = 20#32
 
 s = 64
 T = 140
