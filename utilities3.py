@@ -3,6 +3,8 @@ import numpy as np
 import scipy.io
 import h5py
 import torch.nn as nn
+from torch.utils.data import Dataset
+import os
 
 import operator
 from functools import reduce
@@ -319,3 +321,106 @@ def count_params(model):
         c += reduce(operator.mul, 
                     list(p.size()+(2,) if p.is_complex() else p.size()))
     return c
+
+
+class ImportDataset(Dataset):
+    def __init__(self, parent_dir, matlab_dataset, normalized, T_in, T_out):
+        self.y = None
+        self.x = None
+        self.T_in = T_in
+        self.T_out = T_out
+        self.normalized = normalized
+        self.normalizer_x = None
+        self.normalizer_y = None
+
+        matlab_dataset = parent_dir + matlab_dataset
+        python_dataset = matlab_dataset.replace('.mat', '.pt')
+        os.makedirs(parent_dir, exist_ok=True)
+
+        if os.path.exists(python_dataset):
+            print("Found saved dataset at", python_dataset)
+            self.data = torch.load(python_dataset)['data']
+        else:
+            reader = MatReader(matlab_dataset)
+            self.data = reader.read_field('phi')
+            torch.save({'data': self.data}, python_dataset)
+        self.set_data()
+
+    def set_data(self):
+        self.x = self.data[:, 0:self.T_in, :, :].permute(0, 2, 3, 1)
+        self.y = self.data[:, self.T_in:self.T_in + self.T_out, :, :].permute(0, 2, 3, 1)
+        print(self.x.shape)
+        print(self.y.shape)
+        if self.normalized:
+            self.make_normal()
+
+    def make_normal(self):
+        self.normalizer_x = UnitGaussianNormalizer(self.x)
+        self.normalizer_y = UnitGaussianNormalizer(self.y)
+        self.x = self.normalizer_x.encode(self.x)
+        self.y = self.normalizer_y.encode(self.y)
+
+    def __len__(self):
+        return self.x.shape[0]
+
+    def __getitem__(self, idx):
+        return self.x[idx], self.y[idx]
+
+
+class ModelEvaluator:
+    def __init__(self, model, test_dataset, s, T_in, T_out, device, normalized=False, normalizers=None):
+        self.model = model
+        self.test_dataset = test_dataset
+        self.s = s
+        self.T_in = T_in
+        self.T_out = T_out
+        self.device = device
+        self.normalized = normalized
+        self.normalizers = normalizers
+        self.test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False)
+        self.inp = torch.zeros((len(test_dataset), s, s, T_in))
+        self.exact = torch.zeros((len(test_dataset), s, s, T_out))
+        self.pred = torch.zeros((len(test_dataset), s, s, T_out))
+        self.test_l2_set = []
+
+    def evaluate(self, loss_fn):
+        index = 0
+        with torch.no_grad():
+            for x, y in self.test_loader:
+                x, y = x.to(self.device), y.to(self.device)
+                out = self.model(x)
+                if self.normalized:
+                    out = self.normalizers[1].decode(out)
+                    y = self.normalizers[1].decode(y)
+                    x = self.normalizers[0].decode(x)
+                self.inp[index] = x.squeeze(0)
+                self.exact[index] = y.squeeze(0)
+                self.pred[index] = out.squeeze(0)
+                test_l2 = loss_fn(out.view(1, -1), y.view(1, -1)).item()
+                self.test_l2_set.append(test_l2)
+                print(index, test_l2)
+                index += 1
+
+        return self._compute_statistics()
+
+    def _compute_statistics(self):
+        self.test_l2_set = torch.tensor(self.test_l2_set)
+        test_l2_avg = torch.mean(self.test_l2_set)
+        test_l2_std = torch.std(self.test_l2_set)
+        test_l2_min = torch.min(self.test_l2_set)
+        test_l2_max = torch.max(self.test_l2_set)
+
+        print("The average testing error is", test_l2_avg.item())
+        print("Std. deviation of testing error is", test_l2_std.item())
+        print("Min testing error is", test_l2_min.item())
+        print("Max testing error is", test_l2_max.item())
+
+        return {
+            "input": self.inp,
+            "exact": self.exact,
+            "prediction": self.pred,
+            "average": test_l2_avg.item(),
+            "std_dev": test_l2_std.item(),
+            "min": test_l2_min.item(),
+            "max": test_l2_max.item()
+        }

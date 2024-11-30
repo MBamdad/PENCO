@@ -118,7 +118,7 @@ class FNO2d(nn.Module):
         self.w1 = nn.Conv2d(self.width, self.width, 1)
         self.w2 = nn.Conv2d(self.width, self.width, 1)
         self.w3 = nn.Conv2d(self.width, self.width, 1)
-        self.q = MLP(self.width, 1, self.width * 4, T)  # output channel is 1: u(x, y)
+        self.q = MLP(self.width, 1, self.width * 4)  # output channel is 1: u(x, y)
         self.q2 = MLP(1, 1, self.width * 4, T-1)  # output channel is 1: u(x, y)
 
     def forward(self, x):
@@ -154,13 +154,11 @@ class FNO2d(nn.Module):
         x = x[..., :-self.padding, :-self.padding]
 
         X = torch.zeros(grid.shape[0:-1]).unsqueeze(-1).expand(-1, -1, -1, self.T).to(device)
-        xt = self.q(x)
-        X[..., 0] = xt.permute(0, 2, 3, 1).squeeze(-1)
+        x = self.q(x)
+        X[..., 0] = x.permute(0, 2, 3, 1).squeeze(-1)
         for t in range(1, self.T):
-            x1 = self.q(x, t)
-            x2 = self.q2(xt, t-1)
-            xt = x1 + x2
-            X[..., t] = xt.permute(0, 2, 3, 1).squeeze(-1)
+            x = self.q2(x, t-1)
+            X[..., t] = x.permute(0, 2, 3, 1).squeeze(-1)
         return X
 
     def get_grid(self, shape, device):
@@ -178,17 +176,17 @@ class FNO2d(nn.Module):
 ntrain = 1000
 ntest = 100
 
-batch_size = 10#50
+batch_size = 40
 learning_rate = 0.001
 weight_decay = 1e-4
-epochs = 2#100#500
+epochs = 100#500
 iterations = epochs * (ntrain // batch_size)
 
 modes = 12
 width = 32
 
 s = 64
-T = 50
+T = 140
 
 normalized = True
 training = True
@@ -202,7 +200,7 @@ model_name = f'{problem}_model_S{s}_T{T}_batch{batch_size}.pt'
 model_path = os.path.join(model_dir, model_name)
 os.makedirs(model_dir, exist_ok=True)
 
-DATA_PATH = 'data/AC2D_2000_Nt_101_Nx_64.mat'
+DATA_PATH = f'data/{problem}_{s}.mat'
 
 parent_dir = './data/'
 dataset_file = parent_dir + problem + '_S' + str(s) + '_T_' + str(T) + '.pt'
@@ -227,7 +225,7 @@ else:
     train_a = train_a.reshape(ntrain, s, s, 1)
 
     test_a = train_a_mat[-ntest:, 0, :s, :s]
-    test_u = train_u_mat[-ntest:, 1:T+1, :s, :s]
+    test_u = train_a_mat[-ntest:, 1:T+1, :s, :s]
     test_u = test_u.permute(0, 2, 3, 1)
     test_a = test_a.reshape(ntest, s, s, 1)
 
