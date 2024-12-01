@@ -107,15 +107,15 @@ class THFNO2d(nn.Module):
         self.w1 = nn.Conv2d(self.width, self.width, 1)
         self.w2 = nn.Conv2d(self.width, self.width, 1)
         self.w3 = nn.Conv2d(self.width, self.width, 1)
-        self.q = MLP(self.width, 1, self.width * 4, T)  # output channel is 1: u(x, y)
-        self.q2 = MLP(1, 1, self.width * 4, T - 1)  # output channel is 1: u(x, y)
+        self.q = MLP(self.width, 1, self.width, T)
+        self.q2 = MLP(1, 1, self.width//4, T - 1)
 
     def forward(self, x):
         grid = get_grid(x.shape, x.device)
         x = torch.cat((x, grid), dim=-1)
         x = self.p(x)
         x = x.permute(0, 3, 1, 2)
-        x = F.pad(x, [0, self.padding, 0, self.padding])
+        # x = F.pad(x, [0, self.padding, 0, self.padding])
 
         x1 = self.conv0(x)
         x1 = self.mlp0(x1)
@@ -140,7 +140,7 @@ class THFNO2d(nn.Module):
         x2 = self.w3(x)
         x = x1 + x2
 
-        x = x[..., :-self.padding, :-self.padding]
+        # x = x[..., :-self.padding, :-self.padding]
 
         X = torch.zeros(grid.shape[0:-1]).unsqueeze(-1).expand(-1, -1, -1, self.T).to(x.device)
         xt = self.q(x)

@@ -376,7 +376,8 @@ class ModelEvaluator:
         self.T_out = T_out
         self.device = device
         self.normalized = normalized
-        self.normalizers = normalizers
+        self.normalizer_x = normalizers[0].to(device)
+        self.normalizer_y = normalizers[1].to(device)
         self.test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False)
         self.inp = torch.zeros((len(test_dataset), s, s, T_in))
         self.exact = torch.zeros((len(test_dataset), s, s, T_out))
@@ -390,9 +391,9 @@ class ModelEvaluator:
                 x, y = x.to(self.device), y.to(self.device)
                 out = self.model(x)
                 if self.normalized:
-                    out = self.normalizers[1].decode(out)
-                    y = self.normalizers[1].decode(y)
-                    x = self.normalizers[0].decode(x)
+                    out = self.normalizer_y.decode(out)
+                    y = self.normalizer_y.decode(y)
+                    x = self.normalizer_x.decode(x)
                 self.inp[index] = x.squeeze(0)
                 self.exact[index] = y.squeeze(0)
                 self.pred[index] = out.squeeze(0)
