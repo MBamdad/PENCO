@@ -24,9 +24,9 @@ def plot_field_history(domain, fields, field_names, time_steps, plot_range , pro
     custom_cmap = LinearSegmentedColormap.from_list("black_yellow", colors, N=100)
     folder = problem + "/plots/"
     os.makedirs(folder, exist_ok=True)
-    s = fields[0].shape[0]
-    #x_test_plot = np.linspace(domain[0], domain[1], s).astype('float32')
-    #y_test_plot = np.linspace(domain[0], domain[1], s).astype('float32')
+    # s = fields[0].shape[0]
+    # x_test_plot = np.linspace(domain[0], domain[1], s).astype('float32')
+    # y_test_plot = np.linspace(domain[0], domain[1], s).astype('float32')
 
     interpolation_opt = 'lanczos' if interpolation else 'nearest'
 

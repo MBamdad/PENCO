@@ -368,7 +368,7 @@ class ImportDataset(Dataset):
 
 
 class ModelEvaluator:
-    def __init__(self, model, test_dataset, s, T_in, T_out, device, normalized=False, normalizers=None):
+    def __init__(self, model, test_dataset, s, T_in, T_out, device, normalized=False, normalizers=None, time_history=False):
         self.model = model
         self.test_dataset = test_dataset
         self.s = s
@@ -376,6 +376,7 @@ class ModelEvaluator:
         self.T_out = T_out
         self.device = device
         self.normalized = normalized
+        self.time_history = time_history
         self.normalizer_x = normalizers[0].to(device)
         self.normalizer_y = normalizers[1].to(device)
         self.test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False)
@@ -385,22 +386,50 @@ class ModelEvaluator:
         self.test_l2_set = []
 
     def evaluate(self, loss_fn):
-        index = 0
-        with torch.no_grad():
-            for x, y in self.test_loader:
-                x, y = x.to(self.device), y.to(self.device)
-                out = self.model(x)
-                if self.normalized:
-                    out = self.normalizer_y.decode(out)
-                    y = self.normalizer_y.decode(y)
-                    x = self.normalizer_x.decode(x)
-                self.inp[index] = x.squeeze(0)
-                self.exact[index] = y.squeeze(0)
-                self.pred[index] = out.squeeze(0)
-                test_l2 = loss_fn(out.view(1, -1), y.view(1, -1)).item()
-                self.test_l2_set.append(test_l2)
-                print(index, test_l2)
-                index += 1
+        if self.time_history:
+            index = 0
+            step = 1
+            with torch.no_grad():
+                for xx, yy in self.test_loader:
+                    self.inp[index] = xx.squeeze(0)
+                    xx, yy = xx.to(device), yy.to(device)
+
+                    for t in range(0, self.T_out, step):
+                        y = yy[..., t:t + step]
+                        im = self.model(xx)
+                        # loss += myloss(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
+                        if t == 0:
+                            pred = im
+                        else:
+                            pred = torch.cat((pred, im), -1)
+                        xx = torch.cat((xx[..., step:], im), dim=-1)
+
+                    self.exact[index] = yy.squeeze(0)
+                    self.pred[index] = pred.squeeze(0)
+                    test_l2 = loss_fn(pred.view(1, -1), yy.view(1, -1)).item()
+                    self.test_l2_set.append(test_l2)
+                    print(index, test_l2)
+                    index += 1
+
+        else:
+            index = 0
+            with torch.no_grad():
+                for x, y in self.test_loader:
+                    x, y = x.to(self.device), y.to(self.device)
+                    out = self.model(x)
+                    if self.normalized:
+                        out = self.normalizer_y.decode(out)
+                        y = self.normalizer_y.decode(y)
+                        x = self.normalizer_x.decode(x)
+                    self.inp[index] = x.squeeze(0)
+                    self.exact[index] = y.squeeze(0)
+                    self.pred[index] = out.squeeze(0)
+                    test_l2 = loss_fn(out.view(1, -1), y.view(1, -1)).item()
+                    self.test_l2_set.append(test_l2)
+                    print(index, test_l2)
+                    index += 1
+
+
 
         return self._compute_statistics()
 
