@@ -1,39 +1,39 @@
 import numpy as np
 
 # General Setting
-gpu_number = 'cuda'  # 'cuda:1'
+gpu_number = 'cuda'
 torch_seed = 0
 numpy_seed = 0
 
 # Network Parameters
 nTrain = 1000
 nTest = 100
-batch_size = 50
+batch_size = 10
 learning_rate = 0.001
 weight_decay = 1e-4
-epochs = 1000
+epochs = 100
 iterations = epochs * (nTrain // batch_size)
-modes = 12
+modes = 8
 width = 32
 
 # Discretization
-s = 64
+s = 32
 T_in = 1
-T_out = 10
+T_out = 100
 
 # Training Setting
 normalized = True
-training = True
-load_model = False
+training = False  # False
+load_model = True  # True
 
 # Database
 parent_dir = './data/'
-matlab_dataset = 'AC2D_2000_Nt_101_Nx_64.mat'
+matlab_dataset = 'AC3D_1200_Nt_101_Nx_32.mat'
 
 # Plotting
-index = 72
+index = 12
 domain = [-np.pi, np.pi]
 # time_steps = [29, 69]
-time_steps = [0, 9, 19, 29, 39, 49, 59, 69, 79, 89, 99]
-# time_steps = [0, 4, 9, 14, 19, 24, 29, 34, 39, 44, 49,
-#               54, 59, 64, 69, 74, 79, 84, 89, 94, 99]
+# time_steps = [0, 9, 19, 29, 39, 49, 59, 69, 79, 89, 99]
+time_steps = [0, 4, 9, 14, 19, 24, 29, 34, 39, 44, 49,
+              54, 59, 64, 69, 74, 79, 84, 89, 94, 99]

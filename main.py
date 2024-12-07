@@ -7,30 +7,33 @@ from training import train_fno, train_fno_time
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, random_split
-from utilities3 import ImportDataset, count_params, LpLoss, ModelEvaluator
-from post_processing import plot_loss_trend, plot_field_history, make_video
+from utilities import ImportDataset, count_params, LpLoss, ModelEvaluator
+from post_processing import plot_loss_trend, plot_field_trajectory, make_video
 ################################################################
 # Problem Definition
 ################################################################
-problem = 'AC2D'
-network_name = 'FNO2d'
+# problem = 'AC2D'
+problem = 'AC3D'
+# network_name = 'TNO2d'
 # network_name = 'FNO3d'
-# network_name = 'THFNO2d'
+# network_name = 'FNO2d'
+network_name = 'TNO3d'
+print(f"problem = {problem}")
+print(f"network = {network_name}")
 cf = importlib.import_module(f"configs.config_{problem}_{network_name}")
 network = getattr(importlib.import_module('networks'), network_name)
 torch.manual_seed(cf.torch_seed)
 np.random.seed(cf.numpy_seed)
-if cf.test:
-    problem = problem + 'test'
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-else:
-    device = torch.device(cf.gpu_number if torch.cuda.is_available() else 'cpu')
+device = torch.device(cf.gpu_number if torch.cuda.is_available() else 'cpu')
 print("Device: ", device)
 ################################################################
 # load data and data normalization
 ################################################################
 model_dir = problem + '/models'
 model_name = f'{network_name}_{problem}_S{cf.s}_T{cf.T_in}to{cf.T_out}_width{cf.width}_modes{cf.modes}.pt'
+print(f"model = {model_name}")
+print(f"number of epoch = {cf.epochs}")
+print(f"batch size = {cf.batch_size}")
 model_path = os.path.join(model_dir, model_name)
 os.makedirs(model_dir, exist_ok=True)
 dataset = ImportDataset(cf.parent_dir, cf.matlab_dataset, cf.normalized, cf.T_in, cf.T_out)
@@ -46,7 +49,7 @@ test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=cf.batch_size
 sig = inspect.signature(network.__init__)
 required_args = [param.name for param in sig.parameters.values()
                  if param.default == inspect.Parameter.empty and param.name != "self"]
-model = network(cf.modes, cf.modes, cf.width).to(device) if (len(required_args) == 3) else (
+model = network(cf.modes, cf.modes, cf.width, cf.T_in, cf.T_out).to(device) if (len(required_args) == 5) else (
         network(cf.modes, cf.modes, cf.modes, cf.width, cf.T_in, cf.T_out).to(device))
 if os.path.exists(model_path) and cf.load_model:
     print(f"Loading pre-trained model from {model_path}")
@@ -77,14 +80,9 @@ else:
 losses = [train_mse_log, train_l2_log, test_l2_log]
 labels = ['Train MSE', 'Train L2', 'Test L2']
 plot_loss_trend(losses, labels, problem)
-#evaluator = (ModelEvaluator(model, test_dataset, cf.s, cf.T_in, cf.T_out, device, cf.normalized, normalizers,
-#                            time_history=True) if network_name == 'FNO2d' else
-#             ModelEvaluator(model, test_dataset, cf.s, cf.T_in, cf.T_out, device, cf.normalized, normalizers))
 
 evaluator = ModelEvaluator(model, test_dataset, cf.s, cf.T_in, cf.T_out, device, cf.normalized, normalizers,
                            time_history=(network_name == 'FNO2d'))
-
-
 
 results = evaluator.evaluate(loss_fn=myloss)
 inp = results['input']
@@ -94,14 +92,15 @@ exact = results['exact']
 # post-processing
 ################################################################
 a_ind = inp[cf.index, :, :, :]
-plot_field_history(cf.domain, [a_ind], ['Initial Value'], [0], [[-0.2, 0.2]], problem)
+# plot_field_trajectory(cf.domain, [a_ind], ['Initial Value'], [0], [[-0.2, 0.2]], problem)
 
 u_pred = pred[cf.index, :, :, :]
 u_exact = exact[cf.index, :, :, :]
 fields = [u_exact, u_pred, torch.abs(u_pred-u_exact)]
 field_names = ['Exact Value', 'Predicted Value', 'Error']
-plot_range = [[-0.5, 0.5], [-0.5, 0.5], [0.0, 1.0]]
-#plot_field_history(cf.domain, fields, field_names, cf.time_steps, plot_range, problem)
+#plot_range = [[-0.5, 0.5], [-0.5, 0.5], [0.0, 1.0]]
+plot_range = [[-1.0, 1.0], [-1.0, 1.0], [0.0, 1.0]]
+plot_field_trajectory(cf.domain, fields, field_names, cf.time_steps, plot_range, problem)
 
 # make_video(u_pred, cf.domain, "predicted", plot_range, problem)
 # make_video(u_exact, cf.domain, "exact", plot_range, problem)

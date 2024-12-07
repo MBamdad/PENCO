@@ -2,7 +2,10 @@ import os
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.colors import LinearSegmentedColormap, Normalize
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from skimage import measure
+from matplotlib.cm import ScalarMappable
 
 
 def plot_loss_trend(losses, labels, problem):
@@ -19,44 +22,80 @@ def plot_loss_trend(losses, labels, problem):
     plt.show()
 
 
-def plot_field_history(domain, fields, field_names, time_steps, plot_range , problem, plot_show=True, interpolation=True):
-    colors = ["black", "yellow"]
-    custom_cmap = LinearSegmentedColormap.from_list("black_yellow", colors, N=100)
+def plot_field_trajectory(domain, fields, field_names, time_steps, plot_range, problem, plot_show=True, interpolation=True):
+    colors = ["black", "yellow"] if fields[0].ndim == 3 else ["white", "blue"]
+    custom_cmap = LinearSegmentedColormap.from_list("two_phase", colors, N=100)
     folder = problem + "/plots/"
     os.makedirs(folder, exist_ok=True)
-    # s = fields[0].shape[0]
-    # x_test_plot = np.linspace(domain[0], domain[1], s).astype('float32')
-    # y_test_plot = np.linspace(domain[0], domain[1], s).astype('float32')
-
     interpolation_opt = 'lanczos' if interpolation else 'nearest'
 
     for time_step in time_steps:
-        for field, field_name, range in zip(fields, field_names, plot_range):
-            shot = field[:, :, time_step]
-            plt.figure()
-            plt.imshow(shot, extent=[domain[0], domain[1], domain[0], domain[1]], origin='lower', cmap=custom_cmap,
-                       vmin=range[0], vmax=range[1], aspect='equal', interpolation=interpolation_opt)
-            #plt.colorbar()
-            plt.axis('off')
-            #plt.title(f'{field_name} at T={time_step+1}')
+        for field, field_name, domain_range in zip(fields, field_names, plot_range):
+            shot = field[..., time_step]
+            if shot.ndim == 3:
+                Nx = shot.shape[0]
+                Ny = shot.shape[1]
+                Nz = shot.shape[2]
+
+                Lx = Ly = Lz = (domain[1] - domain[0])
+                hx, hy, hz = Lx / Nx, Ly / Ny, Lz / Nz
+
+                fig = plt.figure(figsize=(8, 8))
+                ax = fig.add_subplot(111, projection="3d")
+                norm = Normalize(vmin=domain_range[0], vmax=domain_range[1])
+                sm = ScalarMappable(cmap=custom_cmap, norm=norm)
+                sm.set_array([])
+
+                # cbar = plt.colorbar(sm, ax=ax, shrink=0.6)
+                # cbar.set_label("Scalar Field Value", fontsize=12)
+                #verts, faces, _, values = measure.marching_cubes(shot.numpy(), level=0.8*domain_range[1], spacing=(hx, hy, hz), allow_degenerate=False)
+                verts, faces, _, values = measure.marching_cubes(shot.numpy(), level=np.mean(domain_range), spacing=(hx, hy, hz), allow_degenerate=False)
+                face_colors = custom_cmap(norm(values))
+                p1 = Poly3DCollection(verts[faces], alpha=0.2, facecolors=face_colors)
+
+                p1.set_edgecolor('navy')
+                p1.set_facecolor(face_colors)
+                p1.set_alpha(0.2)
+
+                ax.add_collection3d(p1)
+                ax.set_title(f'{field_name} at T={time_step + 1}')
+                ax.set_box_aspect([1, 1, 1])
+                # zoom_factor = 0.5
+                # ax.set_xlim([-zoom_factor, zoom_factor])
+                # ax.set_ylim([-zoom_factor, zoom_factor])
+                # ax.set_zlim([-zoom_factor, zoom_factor])
+                ax.view_init(elev=35, azim=45)
+                ax.set_box_aspect([Nx, Ny, Nz])
+
+                ax.grid(False)
+                ax.axis('off')
+                # plt.pause(2)
+
+            else:
+                plt.figure()
+                plt.imshow(shot, extent=(domain[0], domain[1], domain[0], domain[1]), origin='lower', cmap=custom_cmap,
+                           vmin=domain_range[0], vmax=domain_range[1], aspect='equal', interpolation=interpolation_opt)
+                # plt.colorbar()
+                plt.axis('off')
+                # plt.title(f'{field_name} at T={time_step+1}')
             time_step_formatted = str(time_step+1).zfill(3)
-            plot_name = folder + f'{field_name} at T_{time_step_formatted}'
-            plt.savefig(plot_name + '.png', dpi=1200, bbox_inches='tight')
+            plot_name = folder + f'{field_name}_at_T_{time_step_formatted}'
+            plt.savefig(plot_name + '.png', dpi=300, bbox_inches='tight')
             if plot_show:
                 plt.show()
-            plt.close()
+            # plt.close()
 
 
 def make_video(pred, domain, video_name, plot_range, problem, transition_frames=10):
     output_dir = os.path.join(problem, 'video')
     os.makedirs(output_dir, exist_ok=True)
-    frames_dir = os.path.join(output_dir, "plots")
+    frames_dir = os.path.join(output_dir, "plots"+video_name)
     os.makedirs(frames_dir, exist_ok=True)
 
     time_steps = list(range(pred.shape[-1]))
     fields = [pred]
     field_names = [video_name] * len(time_steps)
-    plot_field_history(domain, fields, field_names, time_steps, plot_range, output_dir, False)
+    plot_field_trajectory(domain, fields, field_names, time_steps, plot_range, output_dir, False)
 
     video_path = os.path.join(output_dir, video_name + ".mp4")
     frame_rate = 24

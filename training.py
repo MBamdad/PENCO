@@ -10,10 +10,10 @@ def train_fno(model, myloss, epochs, batch_size, train_loader, test_loader,
     test_l2_log = []
 
     if normalized:
-        a_normalizer = normalizer[0].to(device)
+        # a_normalizer = normalizer[0].to(device)
         y_normalizer = normalizer[1].to(device)
     else:
-        a_normalizer = None
+        # a_normalizer = None
         y_normalizer = None
 
     for ep in range(epochs):
