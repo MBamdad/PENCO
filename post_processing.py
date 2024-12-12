@@ -1,7 +1,9 @@
 import os
 import cv2
+import vtk
 import numpy as np
 import matplotlib.pyplot as plt
+from vtk.util import numpy_support
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from skimage import measure
@@ -48,8 +50,7 @@ def plot_field_trajectory(domain, fields, field_names, time_steps, plot_range, p
 
                 # cbar = plt.colorbar(sm, ax=ax, shrink=0.6)
                 # cbar.set_label("Scalar Field Value", fontsize=12)
-                #verts, faces, _, values = measure.marching_cubes(shot.numpy(), level=0.8*domain_range[1], spacing=(hx, hy, hz), allow_degenerate=False)
-                verts, faces, _, values = measure.marching_cubes(shot.numpy(), level=np.mean(domain_range), spacing=(hx, hy, hz), allow_degenerate=False)
+                verts, faces, _, values = measure.marching_cubes(shot.numpy(), level=np.mean([shot.min(), shot.max()]), spacing=(hx, hy, hz), allow_degenerate=False)
                 face_colors = custom_cmap(norm(values))
                 p1 = Poly3DCollection(verts[faces], alpha=0.2, facecolors=face_colors)
 
@@ -83,13 +84,13 @@ def plot_field_trajectory(domain, fields, field_names, time_steps, plot_range, p
             plt.savefig(plot_name + '.png', dpi=300, bbox_inches='tight')
             if plot_show:
                 plt.show()
-            # plt.close()
+            plt.close()
 
 
 def make_video(pred, domain, video_name, plot_range, problem, transition_frames=10):
-    output_dir = os.path.join(problem, 'video')
+    output_dir = os.path.join(problem, 'video_' + video_name)
     os.makedirs(output_dir, exist_ok=True)
-    frames_dir = os.path.join(output_dir, "plots"+video_name)
+    frames_dir = os.path.join(output_dir, 'plots')
     os.makedirs(frames_dir, exist_ok=True)
 
     time_steps = list(range(pred.shape[-1]))
@@ -116,3 +117,34 @@ def make_video(pred, domain, video_name, plot_range, problem, transition_frames=
     video.release()
 
     print(f"Video saved at {video_path}")
+
+
+def save_vtk(filename, array, grid_shape):
+    # Create a VTK Image Data object to store the 4D array as a time-varying dataset
+    grid = vtk.vtkMultiBlockDataSet()
+
+    # Iterate over each time step (Nt) and add the corresponding 3D grid to the VTK object
+    for t in range(grid_shape[3]):
+        # Extract the 3D slice for the t-th time step
+        time_slice = array[..., t]
+
+        # Create a structured grid for the time slice
+        time_grid = vtk.vtkStructuredPoints()
+        time_grid.SetDimensions(grid_shape[0], grid_shape[1], grid_shape[2])
+
+        # Convert the 3D array to vtk format
+        vtk_array = numpy_support.numpy_to_vtk(time_slice.ravel(), deep=True, array_type=vtk.VTK_FLOAT)
+
+        # Add the 3D data to the grid
+        time_grid.GetPointData().SetScalars(vtk_array)
+
+        # Add the time grid to the multi-block dataset
+        grid.SetBlock(t, time_grid)
+
+    # Create a writer for the multi-block dataset
+    writer = vtk.vtkXMLMultiBlockDataWriter()
+    writer.SetFileName(filename)
+    writer.SetInputData(grid)
+    writer.Write()
+
+    print(f"Saved VTK file: {filename}")

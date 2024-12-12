@@ -19,21 +19,21 @@ width = 32
 # Discretization
 s = 64
 T_in = 1
-T_out = 10
+T_out = 100
 
 # Training Setting
 normalized = True
-training = True
-load_model = False
+training = False  # True
+load_model = True  # False
 
 # Database
 parent_dir = './data/'
 matlab_dataset = 'AC2D_2000_Nt_101_Nx_64.mat'
 
 # Plotting
-index = 72
+index = 79  # 79 # 57
 domain = [-np.pi, np.pi]
 # time_steps = [29, 69]
-time_steps = [0, 9, 19, 29, 39, 49, 59, 69, 79, 89, 99]
-# time_steps = [0, 4, 9, 14, 19, 24, 29, 34, 39, 44, 49,
-#               54, 59, 64, 69, 74, 79, 84, 89, 94, 99]
+# time_steps = [0, 9, 19, 29, 39, 49, 59, 69, 79, 89, 99]
+time_steps = [0, 4, 9, 14, 19, 24, 29, 34, 39, 44, 49,
+              54, 59, 64, 69, 74, 79, 84, 89, 94, 99]

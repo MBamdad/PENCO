@@ -4,20 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="69f06a2e-e075-4f1f-8925-28211e19f97d" name="Changes" comment="Finished Allen-Cahn Problem">
-      <change afterPath="$PROJECT_DIR$/configs/config_AC3D_TNO3d.py" afterDir="false" />
+    <list default="true" id="69f06a2e-e075-4f1f-8925-28211e19f97d" name="Changes" comment="Added Allen-Cahn 3D">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Archive_Code/Codes/Net3D.py" beforeDir="false" afterPath="$PROJECT_DIR$/Archive_Code/Codes/Net3D.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Archive_Code/Codes/PFC2D.py" beforeDir="false" afterPath="$PROJECT_DIR$/Archive_Code/Codes/PFC2D.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Archive_Code/Codes/SH2D.py" beforeDir="false" afterPath="$PROJECT_DIR$/Archive_Code/Codes/SH2D.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_AC2D_FNO2d.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config_AC2D_FNO2d.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_AC2D_FNO3d.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config_AC2D_FNO3d.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_AC2D_THFNO2d.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config_AC2D_TNO2d.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Archive_Code/AC2D_THFNO/config_AC2D_THFNO2d.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_AC2D_TNO2d.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config_AC2D_TNO2d.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_AC3D_TNO3d.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config_AC3D_TNO3d.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/networks.py" beforeDir="false" afterPath="$PROJECT_DIR$/networks.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/post_processing.py" beforeDir="false" afterPath="$PROJECT_DIR$/post_processing.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/training.py" beforeDir="false" afterPath="$PROJECT_DIR$/training.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utilities3.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -42,38 +36,38 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Python.AC2D.executor": "Debug",
-    "Python.AC2D_2.executor": "Run",
-    "Python.AC2D_Net2D.executor": "Run",
-    "Python.AC2D_Net2D_1.executor": "Run",
-    "Python.AC2D_Net2D_2.executor": "Run",
-    "Python.AC2D_Net2D_3.executor": "Debug",
-    "Python.CH2D.executor": "Run",
-    "Python.MBE2D.executor": "Run",
-    "Python.PFC2D.executor": "Run",
-    "Python.SH2D.executor": "Run",
-    "Python.THFNO.executor": "Run",
-    "Python.config_AC2D.executor": "Run",
-    "Python.config_AC2D_FNO2d.executor": "Run",
-    "Python.config_AC2D_FNO3d.executor": "Run",
-    "Python.fourier_3d.executor": "Debug",
-    "Python.main.executor": "Debug",
-    "Python.networks.executor": "Run",
-    "Python.post_processing.executor": "Debug",
-    "Python.test1.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "git-widget-placeholder": "master",
-    "last_opened_file_path": "/data2/hpcuser/zore8312/PycharmProjects/PhaseFieldNet",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Python.AC2D.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.AC2D_2.executor&quot;: &quot;Run&quot;,
+    &quot;Python.AC2D_Net2D.executor&quot;: &quot;Run&quot;,
+    &quot;Python.AC2D_Net2D_1.executor&quot;: &quot;Run&quot;,
+    &quot;Python.AC2D_Net2D_2.executor&quot;: &quot;Run&quot;,
+    &quot;Python.AC2D_Net2D_3.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.CH2D.executor&quot;: &quot;Run&quot;,
+    &quot;Python.MBE2D.executor&quot;: &quot;Run&quot;,
+    &quot;Python.PFC2D.executor&quot;: &quot;Run&quot;,
+    &quot;Python.SH2D.executor&quot;: &quot;Run&quot;,
+    &quot;Python.THFNO.executor&quot;: &quot;Run&quot;,
+    &quot;Python.config_AC2D.executor&quot;: &quot;Run&quot;,
+    &quot;Python.config_AC2D_FNO2d.executor&quot;: &quot;Run&quot;,
+    &quot;Python.config_AC2D_FNO3d.executor&quot;: &quot;Run&quot;,
+    &quot;Python.fourier_3d.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.main.executor&quot;: &quot;Run&quot;,
+    &quot;Python.networks.executor&quot;: &quot;Run&quot;,
+    &quot;Python.post_processing.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.test1.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/data2/hpcuser/zore8312/PycharmProjects/PhaseFieldNet&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/configs" />
@@ -126,7 +120,10 @@
       <workItem from="1733349590652" duration="1949000" />
       <workItem from="1733352121741" duration="6332000" />
       <workItem from="1733405466233" duration="12731000" />
-      <workItem from="1733557048829" duration="5182000" />
+      <workItem from="1733557048829" duration="5541000" />
+      <workItem from="1733583489891" duration="16419000" />
+      <workItem from="1733859258781" duration="7356000" />
+      <workItem from="1733995059967" duration="141000" />
     </task>
     <task id="LOCAL-00001" summary="Initial Commit">
       <option name="closed" value="true" />
@@ -160,7 +157,15 @@
       <option name="project" value="LOCAL" />
       <updated>1733176021525</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="Added Allen-Cahn 3D">
+      <option name="closed" value="true" />
+      <created>1733583274023</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1733583274023</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -172,7 +177,8 @@
     <MESSAGE value="added the connection between time steps - the model development is finished" />
     <MESSAGE value="refactored" />
     <MESSAGE value="Finished Allen-Cahn Problem" />
-    <option name="LAST_COMMIT_MESSAGE" value="Finished Allen-Cahn Problem" />
+    <MESSAGE value="Added Allen-Cahn 3D" />
+    <option name="LAST_COMMIT_MESSAGE" value="Added Allen-Cahn 3D" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -227,16 +233,6 @@
           <line>28</line>
           <option name="timeStamp" value="107" />
         </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/post_processing.py</url>
-          <line>88</line>
-          <option name="timeStamp" value="114" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/post_processing.py</url>
-          <line>50</line>
-          <option name="timeStamp" value="116" />
-        </line-breakpoint>
       </breakpoints>
       <default-breakpoints>
         <breakpoint type="python-exception">
@@ -257,7 +253,7 @@
     <SUITE FILE_PATH="coverage/PhaseFieldNet$config_AC2D.coverage" NAME="config_AC2D Coverage Results" MODIFIED="1733087276180" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/configs" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$config_AC2D_FNO3d.coverage" NAME="config_AC2D_FNO3d Coverage Results" MODIFIED="1733233385695" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/configs" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$AC2D_Net2D.coverage" NAME="AC2D_Net2D Coverage Results" MODIFIED="1732567473230" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/PhaseFieldNet$main.coverage" NAME="main Coverage Results" MODIFIED="1733581467437" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhaseFieldNet$main.coverage" NAME="main Coverage Results" MODIFIED="1733925378374" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$fourier_3d.coverage" NAME="fourier_3d Coverage Results" MODIFIED="1732221600628" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$SH2D.coverage" NAME="SH2D Coverage Results" MODIFIED="1732347080402" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$PFC2D.coverage" NAME="PFC2D Coverage Results" MODIFIED="1732278679485" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />

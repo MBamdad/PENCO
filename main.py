@@ -3,12 +3,12 @@ import importlib
 import torch
 import inspect
 import numpy as np
-from training import train_fno, train_fno_time
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
+from training import train_fno, train_fno_time
 from torch.utils.data import DataLoader, random_split
 from utilities import ImportDataset, count_params, LpLoss, ModelEvaluator
-from post_processing import plot_loss_trend, plot_field_trajectory, make_video
+from post_processing import plot_loss_trend, plot_field_trajectory, make_video, save_vtk
 ################################################################
 # Problem Definition
 ################################################################
@@ -91,16 +91,29 @@ exact = results['exact']
 ################################################################
 # post-processing
 ################################################################
-a_ind = inp[cf.index, :, :, :]
+a_ind = inp[cf.index]
 # plot_field_trajectory(cf.domain, [a_ind], ['Initial Value'], [0], [[-0.2, 0.2]], problem)
+u_pred = pred[cf.index]
+u_exact = exact[cf.index]
 
-u_pred = pred[cf.index, :, :, :]
-u_exact = exact[cf.index, :, :, :]
-fields = [u_exact, u_pred, torch.abs(u_pred-u_exact)]
+#u_pred_e = torch.where(u_pred < -0.1, -1, torch.where(u_pred > 0.1, 1, 0))
+#u_exact_e = torch.where(u_exact < -0.1, -1, torch.where(u_exact > 0.1, 1, 0))
+#error = torch.where(torch.abs(u_pred-u_exact) < 0.25, 0, torch.abs(u_pred-u_exact))
+error = torch.abs(u_pred_e-u_exact_e)
+
+# Save as VTK files
+vtk_dir = os.path.join(problem, 'vtk_outputs')
+os.makedirs(vtk_dir, exist_ok=True)
+save_vtk(os.path.join(vtk_dir, 'u_pred.vti'), u_pred.cpu().numpy(), u_pred.cpu().numpy().shape)
+save_vtk(os.path.join(vtk_dir, 'u_exact.vti'), u_exact.cpu().numpy(), u_exact.cpu().numpy().shape)
+save_vtk(os.path.join(vtk_dir, 'error.vti'), error.cpu().numpy(), error.cpu().numpy().shape)
+
+fields = [u_exact, u_pred, error]
 field_names = ['Exact Value', 'Predicted Value', 'Error']
-#plot_range = [[-0.5, 0.5], [-0.5, 0.5], [0.0, 1.0]]
-plot_range = [[-1.0, 1.0], [-1.0, 1.0], [0.0, 1.0]]
-plot_field_trajectory(cf.domain, fields, field_names, cf.time_steps, plot_range, problem)
+plot_range = [[-0.5, 0.5], [-0.5, 0.5], [0.0, 2.0]]
+# plot_range = [[-1.0, 1.0], [-1.0, 1.0], [0.0, 1.0]]
+# plot_field_trajectory(cf.domain, fields, field_names, cf.time_steps, plot_range, problem)
 
 # make_video(u_pred, cf.domain, "predicted", plot_range, problem)
 # make_video(u_exact, cf.domain, "exact", plot_range, problem)
+

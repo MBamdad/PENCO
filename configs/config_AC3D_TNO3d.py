@@ -11,7 +11,7 @@ nTest = 100
 batch_size = 10
 learning_rate = 0.001
 weight_decay = 1e-4
-epochs = 100
+epochs = 900  # 100
 iterations = epochs * (nTrain // batch_size)
 modes = 8
 width = 32
@@ -34,6 +34,6 @@ matlab_dataset = 'AC3D_1200_Nt_101_Nx_32.mat'
 index = 12
 domain = [-np.pi, np.pi]
 # time_steps = [29, 69]
-# time_steps = [0, 9, 19, 29, 39, 49, 59, 69, 79, 89, 99]
-time_steps = [0, 4, 9, 14, 19, 24, 29, 34, 39, 44, 49,
-              54, 59, 64, 69, 74, 79, 84, 89, 94, 99]
+time_steps = [39, 49, 59, 69, 79, 89, 99]
+# time_steps = [0, 4, 9, 14, 19, 24, 29, 34, 39, 44, 49,
+#               54, 59, 64, 69, 74, 79, 84, 89, 94, 99]
