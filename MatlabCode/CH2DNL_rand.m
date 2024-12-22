@@ -5,19 +5,21 @@ fclose('all');
 
 %% Parameter Initialization
 
-% Spatial Parameters 
-nx = 64; 
+FigDraw = false;
+
+% Spatial Parameters
+nx = 64;
 ny = nx;
-xL = -3; 
-xR = 3; 
-yL = -3; 
+xL = -3;
+xR = 3;
+yL = -3;
 yR = 3;
 h = (xR-xL)/nx;
 x = linspace (xL+0.5*h,xR-0.5*h,nx);
 y = linspace (yL+0.5*h,yR-0.5*h,ny) ;
 
 % Constant
-eps1 = 0.05;
+eps1 = 0.07;
 eps2 = eps1^2;
 
 % Discrete Fourier Transform
@@ -25,7 +27,7 @@ xi = pi*(0:nx-1)/(xR-xL);
 eta = pi*(0:ny-1)/(yR-yL);
 
 % Time Discritization
-dt=0.0005; 
+dt=0.0005;
 nt=1000;
 T = nt*dt;
 num_saved_steps = 101;
@@ -47,15 +49,17 @@ if fileID == -1
 end
 
 %% Initial Condition
-tau = 400;
-alpha = 115;
-% tau = 5;
-% alpha = 2.5;
+% tau = 400;
+% alpha = 115;
+tau = 5;
+alpha = 2.5;
 
 bar_psi = 0.0*ones(nx,ny);
-sig = 20; 
+sig = 20;
 
-% figure;
+if FigDraw
+    figure;
+end
 
 for data_num = 1:data_size
     disp("data number = " + num2str(data_num))
@@ -68,14 +72,16 @@ for data_num = 1:data_size
     all_iterations = zeros(num_saved_steps, nx, ny, 'single');
 
     %% Initial Preview
-    % set(gcf, 'Position', [200, 200, 700, 700]);
-    % contourf(x,y,real(psi'), 'LineStyle', 'none'); 
-    % colormap("jet"); 
-    % colorbar;
-    % title('Initial State')
-    % axis image
-    % axis([x(1) x(nx) y(1) y(ny)])
-    % pause(2)
+    if FigDraw
+        set(gcf, 'Position', [200, 200, 700, 700]);
+        contourf(x,y,real(psi'), 'LineStyle', 'none');
+        colormap("jet");
+        colorbar;
+        title('Initial State')
+        axis image
+        axis([x(1) x(nx) y(1) y(ny)])
+        pause(2)
+    end
 
     %% Update
     save_idx = 1;
@@ -89,20 +95,20 @@ for data_num = 1:data_size
             % disp("Saved = " + num2str(it) + "at" + num2str(save_idx))
             save_idx = save_idx + 1;
         end
-        
+
         f = psi .^3-3* psi ;
         hat_psi = dct2( psi ) ;
         hat_f = dct2( f ) ;
         psi = idct2 (( hat_psi + (sig*dct2( bar_psi)-(xi'.^2+ eta .^2).*hat_f)*dt) ...
         ./(1+(sig+2*(xi'.^2+ eta .^2)+eps2*(xi'.^2+ eta .^2) .^2)*dt) ) ;
-        % if mod(it ,ns)==0
-        %     %contourf(x,y,real(psi'),[0 0]);
-        %     contourf(x,y,real(psi'), 'LineStyle', 'none'); colormap("jet"); colorbar;
-        %     title(['\Delta t = '  num2str(it)])
-        %     axis image
-        %     axis([x(1) x(nx) y(1) y(ny)])
-        %     pause(0.1)
-        % end
+        if mod(it ,ns)==0 && FigDraw
+            %contourf(x,y,real(psi'),[0 0]);
+            contourf(x,y,real(psi'), 'LineStyle', 'none'); colormap("jet"); colorbar;
+            title(['\Delta t = '  num2str(it)])
+            axis image
+            axis([x(1) x(nx) y(1) y(ny)])
+            pause(0.1)
+        end
     end
     fwrite(fileID, all_iterations, 'single');
 end  

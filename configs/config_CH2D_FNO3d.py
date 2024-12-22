@@ -22,6 +22,8 @@ epochs = 1000
 iterations = epochs * (nTrain // batch_size)
 modes = 8
 width = 16
+width_q = width
+width_h = 0
 n_layers = 8
 
 # Discretization

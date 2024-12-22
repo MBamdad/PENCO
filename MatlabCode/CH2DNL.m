@@ -41,19 +41,21 @@ eps1 = h*m/(2*sqrt (2)*atanh(0.9));
 % Minimum = -0.85062
 eps1 = 0.0225;
 eps1 = 0.05;
+eps1 = 0.07;
 % eps1 = 4*eps1;
 
 eps2 = eps1^2;
 
 %% Initial Condition
-tau = 400;
-alpha = 115;
-% tau = 5;
-% alpha = 2.5;
-bar_psi = 0.0*ones(nx,ny) ; 
-%bar_psi = 0.01*ones(nx,ny) ; 
-sig = 80; 
-sig = 20; 
+% tau = 400;
+% alpha = 115;
+tau = 5;
+alpha = 2.5;
+bar_psi = 0.0*ones(nx,ny) ;
+%bar_psi = 0.01*ones(nx,ny) ;
+sig = 80;
+sig = 20;
+sig = 10;
 
 % psi = bar_psi+1*(1-2*rand(nx,ny));
 % psi = bar_psi+GRF(alpha, tau, nx);

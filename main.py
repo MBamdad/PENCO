@@ -14,13 +14,16 @@ from post_processing import plot_loss_trend, plot_field_trajectory, make_video, 
 ################################################################
 # problem = 'AC2D'
 # problem = 'AC3D'
-problem = 'CH2D'
-# problem = 'CH3D'
+problem = 'SH2D'
 # problem = 'CH2DNL'
-# network_name = 'TNO2d'
+network_name = 'TNO2d'
 # network_name = 'FNO3d'
-network_name = 'FNO2d'
+# network_name = 'FNO2d'
+
+# problem = 'CH2D'
+# problem = 'CH3D'
 # network_name = 'TNO3d'
+
 print(f"problem = {problem}")
 print(f"network = {network_name}")
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
@@ -42,6 +45,8 @@ print(f"nTrain = {cf.nTrain}")
 print(f"nTest = {cf.nTest}")
 print(f"learning_rate = {cf.learning_rate}")
 print(f"n_layers = {cf.n_layers}")
+print(f"width_q = {cf.width_q}")
+print(f"width_h = {cf.width_h}")
 
 model_path = os.path.join(model_dir, model_name)
 os.makedirs(model_dir, exist_ok=True)
@@ -58,8 +63,17 @@ test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=cf.batch_size
 sig = inspect.signature(network.__init__)
 required_args = [param.name for param in sig.parameters.values()
                  if param.default == inspect.Parameter.empty and param.name != "self"]
-model = network(cf.modes, cf.modes, cf.width, cf.T_in, cf.T_out, cf.n_layers).to(device) if (len(required_args) == 5) else (
-        network(cf.modes, cf.modes, cf.modes, cf.width, cf.T_in, cf.T_out, cf.n_layers).to(device))
+if network_name == 'FNO2d':
+    model = network(cf.modes, cf.modes, cf.width, cf.width_q, cf.T_in, cf.T_out, cf.n_layers).to(device)
+elif network_name == 'TNO2d':
+    model = network(cf.modes, cf.modes, cf.width, cf.width_q, cf.width_h, cf.T_in, cf.T_out, cf.n_layers).to(device)
+elif network_name == 'FNO3d':
+    model = network(cf.modes, cf.modes, cf.modes, cf.width, cf.width_q, cf.T_in, cf.T_out, cf.n_layers).to(device)
+elif network_name == 'TNO3d':
+    model = network(cf.modes, cf.modes, cf.modes, cf.width, cf.width_q, cf.width_h, cf.T_in, cf.T_out, cf.n_layers).to(device)
+else:
+    raise Exception("network_name is not correct")
+
 print(count_params(model))
 if os.path.exists(model_path) and cf.load_model:
     print(f"Loading pre-trained model from {model_path}")
