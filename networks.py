@@ -133,6 +133,7 @@ class MLP2d(nn.Module):
         self.layers = nn.ModuleList()
         for _ in range(T):
             self.layers.append(nn.Conv2d(in_channels, mid_channels, 1))
+            #self.layers.append(nn.Conv2d(mid_channels, mid_channels, 1))
             self.layers.append(nn.Conv2d(mid_channels, out_channels, 1))
 
     def forward(self, x, t=0):
@@ -140,6 +141,14 @@ class MLP2d(nn.Module):
         x = F.gelu(x)
         x = self.layers[2 * t + 1](x)
         return x
+
+    #def forward(self, x, t=0):
+    #    x = self.layers[3 * t](x)
+    #    x = F.gelu(x)
+    #    x = self.layers[3 * t + 1](x)
+    #    x = F.gelu(x)
+    #    x = self.layers[3 * t + 2](x)
+    #    return x
 
 
 class MLP3d(nn.Module):
@@ -160,7 +169,7 @@ class MLP3d(nn.Module):
 
 class TNO2d(nn.Module):
 
-    def __init__(self, modes1, modes2, width, T_in, T_out):
+    def __init__(self, modes1, modes2, width, T_in, T_out, n_layers=4):
         super(TNO2d, self).__init__()
 
         """
@@ -182,22 +191,21 @@ class TNO2d(nn.Module):
         self.T_out = T_out
         self.T_in = T_in
         self.padding = 9  # pad the domain if input is non-periodic
+        self.n_layers = n_layers
 
         self.p = nn.Linear(3, self.width)  # input channel is 3: (a(x, y), x, y)
-        self.conv0 = SpectralConv2d(self.width, self.width, self.modes1, self.modes2)
-        self.conv1 = SpectralConv2d(self.width, self.width, self.modes1, self.modes2)
-        self.conv2 = SpectralConv2d(self.width, self.width, self.modes1, self.modes2)
-        self.conv3 = SpectralConv2d(self.width, self.width, self.modes1, self.modes2)
-        self.mlp0 = MLP2d(self.width, self.width, self.width)
-        self.mlp1 = MLP2d(self.width, self.width, self.width)
-        self.mlp2 = MLP2d(self.width, self.width, self.width)
-        self.mlp3 = MLP2d(self.width, self.width, self.width)
-        self.w0 = nn.Conv2d(self.width, self.width, 1)
-        self.w1 = nn.Conv2d(self.width, self.width, 1)
-        self.w2 = nn.Conv2d(self.width, self.width, 1)
-        self.w3 = nn.Conv2d(self.width, self.width, 1)
-        self.q = MLP2d(self.width, 1, self.width, T_out)
-        self.q2 = MLP2d(1, 1, self.width // 4, T_out - 1)
+        self.convs = nn.ModuleList(
+            [SpectralConv2d(self.width, self.width, self.modes1, self.modes2) for _ in range(n_layers)])
+        self.mlps = nn.ModuleList([MLP2d(self.width, self.width, self.width) for _ in range(n_layers)])
+        self.ws = nn.ModuleList([nn.Conv2d(self.width, self.width, 1) for _ in range(n_layers)])
+
+        #self.q = MLP2d(self.width, 1, self.width, T_out) # for AC
+        #self.q2 = MLP2d(1, 1, self.width // 4, T_out - 1)
+        #self.q = MLP2d(self.width, 1, 2 * self.width, T_out)  # for CH
+        #self.q2 = MLP2d(1, 1, self.width, T_out - 1)
+        self.q = MLP2d(self.width, 1, 4 * self.width, T_out)  # for CHNL
+        self.q2 = MLP2d(1, 1, 4 * self.width, T_out - 1)
+
 
     def forward(self, x):
         grid = get_grid_2d(x.shape, x.device)
@@ -206,31 +214,14 @@ class TNO2d(nn.Module):
         x = x.permute(0, 3, 1, 2)
         # x = F.pad(x, [0, self.padding, 0, self.padding])
 
-        x1 = self.conv0(x)
-        x1 = self.mlp0(x1)
-        x2 = self.w0(x)
-        x = x1 + x2
-        x = F.gelu(x)
-
-        x1 = self.conv1(x)
-        x1 = self.mlp1(x1)
-        x2 = self.w1(x)
-        x = x1 + x2
-        x = F.gelu(x)
-
-        x1 = self.conv2(x)
-        x1 = self.mlp2(x1)
-        x2 = self.w2(x)
-        x = x1 + x2
-        x = F.gelu(x)
-
-        x1 = self.conv3(x)
-        x1 = self.mlp3(x1)
-        x2 = self.w3(x)
-        x = x1 + x2
+        for i in range(self.n_layers):
+            x1 = self.convs[i](x)
+            x1 = self.mlps[i](x1)
+            x2 = self.ws[i](x)
+            x = x1 + x2
+            x = F.gelu(x) if i < self.n_layers - 1 else x
 
         # x = x[..., :-self.padding, :-self.padding]
-
         X = torch.zeros(*grid.shape[:-1], self.T_out, device=x.device)
         xt = self.q(x)
         X[..., 0] = xt.permute(0, 2, 3, 1).squeeze(-1)
@@ -243,7 +234,7 @@ class TNO2d(nn.Module):
 
 
 class FNO2d(nn.Module):
-    def __init__(self, modes1, modes2, width, T_in, T_out):
+    def __init__(self, modes1, modes2, width, T_in, T_out, n_layers=4):
         super(FNO2d, self).__init__()
 
         """
@@ -265,20 +256,13 @@ class FNO2d(nn.Module):
         self.T_in = T_in
         self.T_out = T_out
         self.padding = 8  # pad the domain if input is non-periodic
+        self.n_layers = n_layers
 
         self.p = nn.Linear(T_in + 2, self.width)  # input channel is 12: the solution of the previous 10 timesteps + 2 locations (u(t-10, x, y), ..., u(t-1, x, y),  x, y)
-        self.conv0 = SpectralConv2d(self.width, self.width, self.modes1, self.modes2)
-        self.conv1 = SpectralConv2d(self.width, self.width, self.modes1, self.modes2)
-        self.conv2 = SpectralConv2d(self.width, self.width, self.modes1, self.modes2)
-        self.conv3 = SpectralConv2d(self.width, self.width, self.modes1, self.modes2)
-        self.mlp0 = MLP2d(self.width, self.width, self.width)
-        self.mlp1 = MLP2d(self.width, self.width, self.width)
-        self.mlp2 = MLP2d(self.width, self.width, self.width)
-        self.mlp3 = MLP2d(self.width, self.width, self.width)
-        self.w0 = nn.Conv2d(self.width, self.width, 1)
-        self.w1 = nn.Conv2d(self.width, self.width, 1)
-        self.w2 = nn.Conv2d(self.width, self.width, 1)
-        self.w3 = nn.Conv2d(self.width, self.width, 1)
+        self.convs = nn.ModuleList(
+            [SpectralConv2d(self.width, self.width, self.modes1, self.modes2) for _ in range(n_layers)])
+        self.mlps = nn.ModuleList([MLP2d(self.width, self.width, self.width) for _ in range(n_layers)])
+        self.ws = nn.ModuleList([nn.Conv2d(self.width, self.width, 1) for _ in range(n_layers)])
         self.norm = nn.InstanceNorm2d(self.width)
         self.q = MLP2d(self.width, 1, self.width * 4)  # output channel is 1: u(x, y)
 
@@ -289,28 +273,12 @@ class FNO2d(nn.Module):
         x = x.permute(0, 3, 1, 2)
         # x = F.pad(x, [0,self.padding, 0,self.padding]) # pad the domain if input is non-periodic
 
-        x1 = self.norm(self.conv0(self.norm(x)))
-        x1 = self.mlp0(x1)
-        x2 = self.w0(x)
-        x = x1 + x2
-        x = F.gelu(x)
-
-        x1 = self.norm(self.conv1(self.norm(x)))
-        x1 = self.mlp1(x1)
-        x2 = self.w1(x)
-        x = x1 + x2
-        x = F.gelu(x)
-
-        x1 = self.norm(self.conv2(self.norm(x)))
-        x1 = self.mlp2(x1)
-        x2 = self.w2(x)
-        x = x1 + x2
-        x = F.gelu(x)
-
-        x1 = self.norm(self.conv3(self.norm(x)))
-        x1 = self.mlp3(x1)
-        x2 = self.w3(x)
-        x = x1 + x2
+        for i in range(self.n_layers):
+            x1 = self.convs[i](x)
+            x1 = self.mlps[i](x1)
+            x2 = self.ws[i](x)
+            x = x1 + x2
+            x = F.gelu(x) if i < self.n_layers - 1 else x
 
         # x = x[..., :-self.padding, :-self.padding] # pad the domain if input is non-periodic
         x = self.q(x)
@@ -319,7 +287,7 @@ class FNO2d(nn.Module):
 
 
 class FNO3d(nn.Module):
-    def __init__(self, modes1, modes2, modes3, width, T_in, T_out):
+    def __init__(self, modes1, modes2, modes3, width, T_in, T_out, n_layers=4):
         super(FNO3d, self).__init__()
 
         """
@@ -342,20 +310,14 @@ class FNO3d(nn.Module):
         self.T_in = T_in
         self.T_out = T_out
         self.padding = 6  # pad the domain if input is non-periodic
+        self.n_layers = n_layers
 
         self.p = nn.Linear(self.T_in + 3, self.width)  # input channel is 12: the solution of the first 10 time_steps + 3 locations (u(1, x, y), ..., u(10, x, y),  x, y, t)
-        self.conv0 = SpectralConv3d(self.width, self.width, self.modes1, self.modes2, self.modes3)
-        self.conv1 = SpectralConv3d(self.width, self.width, self.modes1, self.modes2, self.modes3)
-        self.conv2 = SpectralConv3d(self.width, self.width, self.modes1, self.modes2, self.modes3)
-        self.conv3 = SpectralConv3d(self.width, self.width, self.modes1, self.modes2, self.modes3)
-        self.mlp0 = MLP3d(self.width, self.width, self.width)
-        self.mlp1 = MLP3d(self.width, self.width, self.width)
-        self.mlp2 = MLP3d(self.width, self.width, self.width)
-        self.mlp3 = MLP3d(self.width, self.width, self.width)
-        self.w0 = nn.Conv3d(self.width, self.width, 1)
-        self.w1 = nn.Conv3d(self.width, self.width, 1)
-        self.w2 = nn.Conv3d(self.width, self.width, 1)
-        self.w3 = nn.Conv3d(self.width, self.width, 1)
+
+        self.convs = nn.ModuleList(
+            [SpectralConv3d(self.width, self.width, self.modes1, self.modes2, self.modes3) for _ in range(n_layers)])
+        self.mlps = nn.ModuleList([MLP3d(self.width, self.width, self.width) for _ in range(n_layers)])
+        self.ws = nn.ModuleList([nn.Conv3d(self.width, self.width, 1) for _ in range(n_layers)])
         self.q = MLP3d(self.width, 1, self.width)  # output channel is 1: u(x, y)
 
     def forward(self, x):
@@ -366,28 +328,12 @@ class FNO3d(nn.Module):
         x = x.permute(0, 4, 1, 2, 3)
         x = F.pad(x, [0, self.padding])  # pad the domain if input is non-periodic
 
-        x1 = self.conv0(x)
-        x1 = self.mlp0(x1)
-        x2 = self.w0(x)
-        x = x1 + x2
-        x = F.gelu(x)
-
-        x1 = self.conv1(x)
-        x1 = self.mlp1(x1)
-        x2 = self.w1(x)
-        x = x1 + x2
-        x = F.gelu(x)
-
-        x1 = self.conv2(x)
-        x1 = self.mlp2(x1)
-        x2 = self.w2(x)
-        x = x1 + x2
-        x = F.gelu(x)
-
-        x1 = self.conv3(x)
-        x1 = self.mlp3(x1)
-        x2 = self.w3(x)
-        x = x1 + x2
+        for i in range(self.n_layers):
+            x1 = self.convs[i](x)
+            x1 = self.mlps[i](x1)
+            x2 = self.ws[i](x)
+            x = x1 + x2
+            x = F.gelu(x) if i < self.n_layers - 1 else x
 
         x = x[..., :-self.padding]
         x = self.q(x)
@@ -397,7 +343,7 @@ class FNO3d(nn.Module):
 
 
 class TNO3d(nn.Module):
-    def __init__(self, modes1, modes2, modes3, width, T_in, T_out):
+    def __init__(self, modes1, modes2, modes3, width, T_in, T_out, n_layers=4):
         super(TNO3d, self).__init__()
 
         """
@@ -420,8 +366,13 @@ class TNO3d(nn.Module):
         self.T_in = T_in
         self.T_out = T_out
         self.padding = 9  # pad the domain if input is non-periodic
+        self.n_layers = n_layers
 
         self.p = nn.Linear(4, self.width)  # input channel is 4: (a(x, y, z), x, y, z)
+        self.convs = nn.ModuleList(
+            [SpectralConv3d(self.width, self.width, self.modes1, self.modes2, self.modes3) for _ in range(n_layers)])
+        self.mlps = nn.ModuleList([MLP3d(self.width, self.width, self.width) for _ in range(n_layers)])
+        self.ws = nn.ModuleList([nn.Conv3d(self.width, self.width, 1) for _ in range(n_layers)])
         self.conv0 = SpectralConv3d(self.width, self.width, self.modes1, self.modes2, self.modes3)
         self.conv1 = SpectralConv3d(self.width, self.width, self.modes1, self.modes2, self.modes3)
         self.conv2 = SpectralConv3d(self.width, self.width, self.modes1, self.modes2, self.modes3)
@@ -444,31 +395,14 @@ class TNO3d(nn.Module):
         x = x.permute(0, 4, 1, 2, 3)
         # x = F.pad(x, [0, self.padding, 0, self.padding])
 
-        x1 = self.conv0(x)
-        x1 = self.mlp0(x1)
-        x2 = self.w0(x)
-        x = x1 + x2
-        x = F.gelu(x)
-
-        x1 = self.conv1(x)
-        x1 = self.mlp1(x1)
-        x2 = self.w1(x)
-        x = x1 + x2
-        x = F.gelu(x)
-
-        x1 = self.conv2(x)
-        x1 = self.mlp2(x1)
-        x2 = self.w2(x)
-        x = x1 + x2
-        x = F.gelu(x)
-
-        x1 = self.conv3(x)
-        x1 = self.mlp3(x1)
-        x2 = self.w3(x)
-        x = x1 + x2
+        for i in range(self.n_layers):
+            x1 = self.convs[i](x)
+            x1 = self.mlps[i](x1)
+            x2 = self.ws[i](x)
+            x = x1 + x2
+            x = F.gelu(x) if i < self.n_layers - 1 else x
 
         # x = x[..., :-self.padding, :-self.padding]
-
         X = torch.zeros(*grid.shape[:-1], self.T_out, device=x.device)
         xt = self.q(x)
         X[..., 0] = xt.permute(0, 2, 3, 4, 1).squeeze(-1)

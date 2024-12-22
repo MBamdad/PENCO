@@ -15,7 +15,7 @@ from functools import partial
 # Utilities
 #
 #################################################
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 # reading data
@@ -46,6 +46,7 @@ class MatReader(object):
         self._load_file()
 
     def read_field(self, field):
+        print(f"Available keys in self.data: {list(self.data.keys())}")
         x = self.data[field]
 
         if not self.old_mat:
@@ -389,8 +390,8 @@ class ModelEvaluator:
         self.device = device
         self.normalized = normalized
         self.time_history = time_history
-        self.normalizer_x = normalizers[0].to(device)
-        self.normalizer_y = normalizers[1].to(device)
+        self.normalizer_x = normalizers[0].to(self.device)
+        self.normalizer_y = normalizers[1].to(self.device)
         self.test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False)
         spatial_dims = [s] * (len(test_dataset[0][0].shape) - 1)
         self.inp = torch.zeros((len(test_dataset), *spatial_dims, T_in))
@@ -405,7 +406,7 @@ class ModelEvaluator:
             with torch.no_grad():
                 for xx, yy in self.test_loader:
                     self.inp[index] = xx.squeeze(0)
-                    xx, yy = xx.to(device), yy.to(device)
+                    xx, yy = xx.to(self.device), yy.to(self.device)
 
                     for t in range(0, self.T_out, step):
                         y = yy[..., t:t + step]

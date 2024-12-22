@@ -7,8 +7,6 @@
 /dataSources/
 /dataSources.local.xml
 
-*.m
-/database/AC2D_4circle.m
 *.mat
 *.pt
 *.err
