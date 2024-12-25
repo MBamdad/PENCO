@@ -74,8 +74,12 @@ def plot_field_trajectory(domain, fields, field_names, time_steps, plot_range, p
 
             else:
                 plt.figure()
-                plt.imshow(shot, extent=(domain[0], domain[1], domain[0], domain[1]), origin='lower', cmap=custom_cmap,
-                           vmin=domain_range[0], vmax=domain_range[1], aspect='equal', interpolation=interpolation_opt)
+                #plt.imshow(shot, extent=(domain[0], domain[1], domain[0], domain[1]), origin='lower', cmap=custom_cmap,
+                #           vmin=domain_range[0], vmax=domain_range[1], aspect='equal', interpolation=interpolation_opt)
+
+                plt.imshow(shot, extent=(domain[0], domain[1], domain[0], domain[1]), aspect='equal', cmap='jet',
+                           vmin=domain_range[0], vmax=domain_range[1], interpolation=interpolation_opt)
+
                 # plt.colorbar()
                 plt.axis('off')
                 # plt.title(f'{field_name} at T={time_step+1}')

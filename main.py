@@ -14,8 +14,8 @@ from post_processing import plot_loss_trend, plot_field_trajectory, make_video, 
 ################################################################
 # problem = 'AC2D'
 # problem = 'AC3D'
-problem = 'SH2D'
-# problem = 'CH2DNL'
+problem = 'CH2DNL'
+# problem = 'SH2D'
 network_name = 'TNO2d'
 # network_name = 'FNO3d'
 # network_name = 'FNO2d'
@@ -37,7 +37,7 @@ print("Device: ", device)
 # load data and data normalization
 ################################################################
 model_dir = problem + '/models'
-model_name = f'{network_name}_{problem}_S{cf.s}_T{cf.T_in}to{cf.T_out}_width{cf.width}_modes{cf.modes}.pt'
+model_name = f'{network_name}_{problem}_S{cf.s}_T{cf.T_in}to{cf.T_out}_width{cf.width}_modes{cf.modes}_q{cf.width_q}_h{cf.width_h}.pt'
 print(f"model = {model_name}")
 print(f"number of epoch = {cf.epochs}")
 print(f"batch size = {cf.batch_size}")
@@ -74,18 +74,26 @@ elif network_name == 'TNO3d':
 else:
     raise Exception("network_name is not correct")
 
-print(count_params(model))
+print(count_params(model))      # Print model parameters
+train_mse_log, train_l2_log, test_l2_log = [], [], []       # Initialize logs
+
+# Load the entire model and logs
 if os.path.exists(model_path) and cf.load_model:
     print(f"Loading pre-trained model from {model_path}")
-    # model = torch.load(model_path, map_location=device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
+    checkpoint = torch.load(model_path, map_location=device)
+    model = checkpoint['model']
+    train_mse_log = checkpoint.get('train_mse_log', [])
+    train_l2_log = checkpoint.get('train_l2_log', [])
+    test_l2_log = checkpoint.get('test_l2_log', [])
 else:
     print("No pre-trained model loaded. Initializing a new model.")
 
+# Define optimizer, scheduler, and loss function
 optimizer = torch.optim.Adam(model.parameters(), lr=cf.learning_rate, weight_decay=cf.weight_decay)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cf.iterations)
 myloss = LpLoss(size_average=False)
 
+# Train the model
 if cf.training:
     if network_name == 'FNO2d':
         model, train_l2_log, test_l2_log = (
@@ -96,10 +104,13 @@ if cf.training:
         model, train_mse_log, train_l2_log, test_l2_log = (
             train_fno(model, myloss, cf.epochs, cf.batch_size, train_loader, test_loader,
                       optimizer, scheduler, cf.normalized, normalizers, device))
-    print(f"Saving model to {model_path}")
-    torch.save(model.state_dict(), model_path)
-else:
-    train_mse_log, train_l2_log, test_l2_log = [], [], []
+    print(f"Saving model and logs to {model_path}")
+    torch.save({
+        'model': model,
+        'train_mse_log': train_mse_log,
+        'train_l2_log': train_l2_log,
+        'test_l2_log': test_l2_log
+    }, model_path)
 
 # losses = [train_mse_log, train_l2_log, test_l2_log]
 # labels = ['Train MSE', 'Train L2', 'Test L2']
@@ -122,7 +133,8 @@ a_ind = inp[cf.index]
 u_pred = pred[cf.index]
 u_exact = exact[cf.index]
 
-error = torch.abs(u_pred-u_exact)
+# error = torch.abs(u_pred-u_exact)
+error = u_pred-u_exact
 
 #u_pred_e = torch.where(u_pred < -0.0, -1, torch.where(u_pred > 0.0, 1, 0))
 #u_exact_e = torch.where(u_exact < -0.0, -1, torch.where(u_exact > 0.0, 1, 0))
@@ -140,7 +152,8 @@ error = torch.abs(u_pred-u_exact)
 
 fields = [u_exact, u_pred, error]
 field_names = ['Exact Value', 'Predicted Value', 'Error']
-plot_range = [[-0.5, 0.5], [-0.5, 0.5], [0.0, 1.0]]
+#plot_range = [[-0.75, 0.75], [-0.75, 0.75], [-0.5, 0.5]]
+plot_range = [[-0.75, 0.75], [-0.75, 0.75], [-0.5, 0.5]]
 # plot_range = [[-1.0, 1.0], [-1.0, 1.0], [0.0, 1.0]]
 plot_field_trajectory(cf.domain, fields, field_names, cf.time_steps, plot_range, problem)
 
