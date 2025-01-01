@@ -14,8 +14,8 @@ from post_processing import plot_loss_trend, plot_field_trajectory, make_video, 
 ################################################################
 # problem = 'AC2D'
 # problem = 'AC3D'
-problem = 'CH2DNL'
-# problem = 'SH2D'
+# problem = 'CH2DNL'
+problem = 'SH2D'
 network_name = 'TNO2d'
 # network_name = 'FNO3d'
 # network_name = 'FNO2d'

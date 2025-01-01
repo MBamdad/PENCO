@@ -44,13 +44,15 @@ ns=100;
 %u=-0.45 + 0.05*(2*rand(Nx,Ny,Nz)-1);
 %u=0.45 - 0.05*(2*rand(Nx,Ny,Nz)-1);
 
-tau = 400;
-alpha = 115;
-%norm_a = GRF3D(alpha, tau, Nx);
-%norm_a = norm_a + 0.2 * std(norm_a(:));   
-%u = ones(Nx,Ny,Nz);
-%u(norm_a < 0) = -1;
-u = GRF3D(alpha, tau, Nx);
+%tau = 400;
+%alpha = 115;
+tau = 10;
+alpha = 5.5;
+norm_a = GRF3D(alpha, tau, Nx);
+norm_a = norm_a + 0.2 * std(norm_a(:));   
+u = ones(Nx,Ny,Nz);
+u(norm_a < 0) = -1;
+%u = GRF3D(alpha, tau, Nx);
 
 %% Initial Preview
 % figure(1);

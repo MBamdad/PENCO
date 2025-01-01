@@ -16,6 +16,7 @@ y=linspace(-0.5*Ly+hy,0.5*Ly,Ny);
 
 % constant
 epsilon=0.5;%0.2;
+%epsilon=2.5;
 
 % Discrete Fourier Transform
 p=2*pi/Lx*[0:Nx/2 -Nx/2+1:-1];
@@ -26,9 +27,9 @@ q2=q.^2;
 
 % Time Discritization
 dt=0.001; 
-dt=0.1; 
-T=100;
-Nt=round(T/dt);
+%dt=0.1;
+Nt=20000;
+T=Nt*dt;
 Np=100;
 ns=Nt/Np;
 
@@ -36,12 +37,18 @@ ns=Nt/Np;
 % u=1*(2*rand(Nx,Ny)-1);
 tau = 3.5;%100;
 alpha = 2.;
-u = GRF(alpha, tau, Nx);
+tau=8.;
+alpha=4.;
+norm_a = GRF(alpha, tau, Nx);
+norm_a = norm_a - 0.2 * std(norm_a(:));    
+u = zeros(Nx,Nx);
+u(norm_a >= 0) = 1;
+u(norm_a < 0) = -1;
 
 %% Initial Preview
 figure(1); 
 clf;
-set(gcf, 'Position', [100, 100, 900, 900]);
+set(gcf, 'Position', [800, 100, 900, 900]);
 surf(x,y,real(u')); 
 shading interp; 
 view(0,90); 
@@ -55,6 +62,7 @@ for iter=1:Nt
     disp("Iteration Number = " + num2str(iter))
     u=real(u);
     s_hat=fft2(u/dt)-fft2(u.^3)+2*(pp2+qq2).*fft2(u);
+    %v_hat=s_hat./(1.0/dt+(1-epsilon)+(pp2+qq2).^2);
     v_hat=s_hat./(1.0/dt+(1-epsilon)+(pp2+qq2).^2);
     u=ifft2(v_hat);
     if (mod(iter,ns)==0)

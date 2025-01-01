@@ -168,7 +168,7 @@ class MLP3d(MLP2d):
 
 
 class FNO2d(nn.Module):
-    def __init__(self, modes1, modes2, width, width_q, T_in, T_out, n_layers=4):
+    def __init__(self, modes1, modes2, width, width_q, T_in, T_out, n_layers):
         super(FNO2d, self).__init__()
 
         """
@@ -222,7 +222,7 @@ class FNO2d(nn.Module):
 
 
 class TNO2d(FNO2d):
-    def __init__(self, modes1, modes2, width, width_q, width_h, T_in, T_out, n_layers=4):
+    def __init__(self, modes1, modes2, width, width_q, width_h, T_in, T_out, n_layers, n_layers_q=2, n_layers_h=4):
         super(TNO2d, self).__init__(modes1, modes2, width, width_q, T_in, T_out, n_layers)
 
         self.width_h = width_h
@@ -230,8 +230,8 @@ class TNO2d(FNO2d):
         #self.q2 = MLP2d(1, 1, self.width // 4, T_out - 1)
         #self.q = MLP2d(self.width, 1, 2 * self.width, T_out)  # for CH
         #self.q2 = MLP2d(1, 1, self.width, T_out - 1)
-        self.q = MLP2d(self.width, 1, self.width_q, T_out)  # for CHNL
-        self.h = MLP2d(1, 1, self.width_h, T_out - 1)
+        self.q = MLP2d(self.width, 1, self.width_q, T_out, n_layers_q)  # for CHNL
+        self.h = MLP2d(1, 1, self.width_h, T_out - 1, n_layers_h)
 
     def forward(self, x):
         grid = get_grid_2d(x.shape, x.device)
@@ -260,7 +260,7 @@ class TNO2d(FNO2d):
 
 
 class FNO3d(nn.Module):
-    def __init__(self, modes1, modes2, modes3, width, width_q, T_in, T_out, n_layers=4):
+    def __init__(self, modes1, modes2, modes3, width, width_q, T_in, T_out, n_layers, n_layers_q=2, n_layers_h=2):
         super(FNO3d, self).__init__()
 
         """
@@ -318,7 +318,7 @@ class FNO3d(nn.Module):
 
 
 class TNO3d(FNO3d):
-    def __init__(self, modes1, modes2, modes3, width, width_q, width_h, T_in, T_out, n_layers=4):
+    def __init__(self, modes1, modes2, modes3, width, width_q, width_h, T_in, T_out, n_layers):
         super(TNO3d, self).__init__(modes1, modes2, modes3, width, width_q, T_in, T_out, n_layers)
         """
         input: the initial condition and locations (a(x, y, z), x, y, z)
