@@ -1,28 +1,28 @@
 import numpy as np
 
 # General Setting
-gpu_number = 'cuda:2'  # 'cuda:1'
+gpu_number = 'cuda:0'  # 'cuda:1'
 torch_seed = 0
 numpy_seed = 0
 
 # Network Parameters
 nTrain = 4000
 nTest = 400
-batch_size = 50
+batch_size = 10
 learning_rate = 0.005
 weight_decay = 1e-4
-epochs = 100
+epochs = 200
 iterations = epochs * (nTrain // batch_size)
-modes = 8
-width = 10
-width_q = 8
-width_h = 8
+modes = 14
+width = 64
+width_q = 32
+width_h = 16
 n_layers = 4
 
 # Discretization
 s = 64
 T_in = 1
-T_out = 10
+T_out = 100
 
 # Training Setting
 normalized = True

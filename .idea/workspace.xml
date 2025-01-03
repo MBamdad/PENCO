@@ -4,16 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="69f06a2e-e075-4f1f-8925-28211e19f97d" name="Changes" comment="added CH2DNL">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/MatlabCode/CH3D.m" beforeDir="false" afterPath="$PROJECT_DIR$/MatlabCode/CH3D.m" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/MatlabCode/CH3D_rand.m" beforeDir="false" afterPath="$PROJECT_DIR$/MatlabCode/CH3D_rand.m" afterDir="false" />
+    <list default="true" id="69f06a2e-e075-4f1f-8925-28211e19f97d" name="Changes" comment="added SH2D">
       <change beforePath="$PROJECT_DIR$/MatlabCode/GRFtest.m" beforeDir="false" afterPath="$PROJECT_DIR$/MatlabCode/GRFtest.m" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/MatlabCode/SH2D.m" beforeDir="false" afterPath="$PROJECT_DIR$/MatlabCode/SH2D.m" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/MatlabCode/SH2D_rand.m" beforeDir="false" afterPath="$PROJECT_DIR$/MatlabCode/SH2D_rand.m" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_AC2D_TNO2d.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config_AC2D_TNO2d.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/configs/config_SH2D_TNO2d.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config_SH2D_TNO2d.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/networks.py" beforeDir="false" afterPath="$PROJECT_DIR$/networks.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utilities.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -257,6 +252,7 @@
       <workItem from="1735126261413" duration="75000" />
       <workItem from="1735356723104" duration="1208000" />
       <workItem from="1735422837186" duration="1387000" />
+      <workItem from="1735719009558" duration="561000" />
     </task>
     <task id="LOCAL-00001" summary="Initial Commit">
       <option name="closed" value="true" />
@@ -322,7 +318,15 @@
       <option name="project" value="LOCAL" />
       <updated>1735126332032</updated>
     </task>
-    <option name="localTasksCounter" value="9" />
+    <task id="LOCAL-00009" summary="added SH2D">
+      <option name="closed" value="true" />
+      <created>1735719422931</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1735719422931</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -339,7 +343,8 @@
     <MESSAGE value="added MATLAB codes for creating database" />
     <MESSAGE value="seperated the number of layers in fourier part and convolutional part" />
     <MESSAGE value="added CH2DNL" />
-    <option name="LAST_COMMIT_MESSAGE" value="added CH2DNL" />
+    <MESSAGE value="added SH2D" />
+    <option name="LAST_COMMIT_MESSAGE" value="added SH2D" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>

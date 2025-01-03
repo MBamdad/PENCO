@@ -2,8 +2,8 @@
 s = 64;                    % Fixed grid size for all plots
 % tau_values = linspace(1500, 2000, 5);   % 5 different tau values
 % alpha_values = linspace(0.1, 10, 5);   % 5 different alpha values
-tau_values = linspace(3, 8, 5);   % 5 different tau values
-alpha_values = linspace(1, 4, 5);   % 5 different alpha values
+tau_values = linspace(2, 3, 5);   % 5 different tau values
+alpha_values = linspace(3, 5, 5);   % 5 different alpha values
 
 % Initialize figure
 colormap(jet);              % Set colormap for all subplots

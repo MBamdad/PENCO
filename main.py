@@ -16,8 +16,8 @@ from post_processing import plot_loss_trend, plot_field_trajectory, make_video, 
 # problem = 'AC3D'
 # problem = 'CH2DNL'
 problem = 'SH2D'
-network_name = 'TNO2d'
-# network_name = 'FNO3d'
+# network_name = 'TNO2d'
+network_name = 'FNO3d'
 # network_name = 'FNO2d'
 
 # problem = 'CH2D'
@@ -136,10 +136,10 @@ u_exact = exact[cf.index]
 # error = torch.abs(u_pred-u_exact)
 error = u_pred-u_exact
 
-#u_pred_e = torch.where(u_pred < -0.0, -1, torch.where(u_pred > 0.0, 1, 0))
-#u_exact_e = torch.where(u_exact < -0.0, -1, torch.where(u_exact > 0.0, 1, 0))
-#error_e = torch.abs(u_pred_e-u_exact_e)
-#error = torch.where(error_e < 0.01, 0, torch.abs(u_pred-u_exact))
+# u_pred_e = torch.where(u_pred < -0.0, -1, torch.where(u_pred > 0.0, 1, 0))
+# u_exact_e = torch.where(u_exact < -0.0, -1, torch.where(u_exact > 0.0, 1, 0))
+# error_e = torch.abs(u_pred_e-u_exact_e)
+# error = torch.where(error_e < 0.01, 0, torch.abs(u_pred-u_exact))
 
 # error = torch.abs(u_pred-u_exact)
 
@@ -152,10 +152,10 @@ error = u_pred-u_exact
 
 fields = [u_exact, u_pred, error]
 field_names = ['Exact Value', 'Predicted Value', 'Error']
-#plot_range = [[-0.75, 0.75], [-0.75, 0.75], [-0.5, 0.5]]
-plot_range = [[-0.75, 0.75], [-0.75, 0.75], [-0.5, 0.5]]
+# plot_range = [[-0.75, 0.75], [-0.75, 0.75], [-0.5, 0.5]]
+plot_range = [[-0.6, 0.6], [-0.6, 0.6], [-0.3, 0.3]]
 # plot_range = [[-1.0, 1.0], [-1.0, 1.0], [0.0, 1.0]]
-plot_field_trajectory(cf.domain, fields, field_names, cf.time_steps, plot_range, problem)
+# plot_field_trajectory(cf.domain, fields, field_names, cf.time_steps, plot_range, problem)
 
 # make_video(u_pred, cf.domain, "predicted", plot_range, problem)
 # make_video(u_exact, cf.domain, "exact", plot_range, problem)

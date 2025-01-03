@@ -422,7 +422,7 @@ class ModelEvaluator:
                     self.pred[index] = pred.squeeze(0)
                     test_l2 = loss_fn(pred.view(1, -1), yy.view(1, -1)).item()
                     self.test_l2_set.append(test_l2)
-                    print(index, test_l2)
+                    #print(index, test_l2)
                     index += 1
 
         else:
@@ -440,7 +440,7 @@ class ModelEvaluator:
                     self.pred[index] = out.squeeze(0)
                     test_l2 = loss_fn(out.view(1, -1), y.view(1, -1)).item()
                     self.test_l2_set.append(test_l2)
-                    print(index, test_l2)
+                    #print(index, test_l2)
                     index += 1
 
         return self._compute_statistics()
