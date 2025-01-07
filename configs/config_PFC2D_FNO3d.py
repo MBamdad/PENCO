@@ -1,7 +1,26 @@
+"""
+model = FNO3d_PFC2D_S64_T1to100_width16_modes8_q16_h16.pt
+number of epoch = 1000
+batch size = 50
+nTrain = 4000
+nTest = 400
+learning_rate = 0.005
+n_layers = 4
+width_q = 16
+width_h = 16
+Found saved dataset at ./data/PFC2D_4440_Nt_101_Nx_64.pt
+torch.Size([4440, 64, 64, 1])
+torch.Size([4440, 64, 64, 100])
+4197937
+-----------------------------------------------------------
+
+
+
+"""
 import numpy as np
 
 # General Setting
-gpu_number = 'cuda:0'  # 'cuda:1'
+gpu_number = 'cuda:1'  # 'cuda:1'
 torch_seed = 0
 numpy_seed = 0
 
@@ -11,18 +30,18 @@ nTest = 400
 batch_size = 50
 learning_rate = 0.005
 weight_decay = 1e-4
-epochs = 1000
+epochs = 100
 iterations = epochs * (nTrain // batch_size)
 modes = 8
-width = 14
-width_q = 8
-width_h = 8
+width = 8
+width_q = 4
+width_h = 4
 n_layers = 4
 
 # Discretization
 s = 64
 T_in = 1
-T_out = 100
+T_out = 10
 
 # Training Setting
 normalized = True
@@ -31,7 +50,7 @@ load_model = False  # False
 
 # Database
 parent_dir = './data/'
-matlab_dataset = 'SH2D_11100_Nt_101_Nx_64.mat'
+matlab_dataset = 'PFC2D_4440_Nt_101_Nx_64.mat'
 
 # Plotting
 index = 386  # 24  # 62  3  244

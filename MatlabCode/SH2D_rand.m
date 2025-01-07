@@ -49,7 +49,6 @@ if fileID == -1
     error("Cannot open binary file for writing.");
 end
 
-
 %% Initial Condition
 %u=0.2*(2*rand(Nx,Ny)-1);
 
@@ -78,7 +77,6 @@ for data_num = 1:data_size
 
     all_iterations = zeros(num_saved_steps, Nx, Ny, 'single');
 
-
     %% Initial Preview
     if FigDraw
         clf;
@@ -97,7 +95,7 @@ for data_num = 1:data_size
         % disp("Iteration = " + num2str(iter))
         if iter == 1 || mod(iter,ns) == 0 || iter == Nt
             all_iterations(save_idx, :, :, :) = u;
-            %disp("Saved = " + num2str(iter) + "at" + num2str(save_idx))
+            % disp("Saved = " + num2str(iter) + "at" + num2str(save_idx))
             save_idx = save_idx + 1;
         end
 

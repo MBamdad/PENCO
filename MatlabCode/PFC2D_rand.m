@@ -2,16 +2,16 @@ clc;
 clear;
 close all;
 fclose('all');
-
+disp('START')
 %% Parameter Initialization
 
-FigDraw = false;
+FigDraw = 1;
 
 % Spatial Parameters
-Nx=64; 
-Ny=Nx; 
-Lx=64; 
-Ly=Lx; 
+Nx=64;
+Ny=Nx;
+Lx=64;
+Ly=Lx;
 hx=Lx/Nx; 
 hy=Ly/Ny;
 
@@ -29,14 +29,16 @@ q2=q.^2;
 [pp2,qq2]=ndgrid(p2,q2);
 
 % Time Discritization
-dt=0.1; 
+dt=0.05;
+dt=0.1;
+Nt = 20000;
 Nt = 10000;
 T=Nt*dt; 
 num_saved_steps = 101;
 ns=Nt/(num_saved_steps-1);
 
 % Dataset
-data_size = 4400;
+data_size = 4440;
 binary_filename = "PFC2D_" + num2str(data_size) + "_Nt_" + num2str(num_saved_steps) + ...
                   "_Nx_" + num2str(Nx) + ".bin";
 mat_filename = "PFC2D_" + num2str(data_size) + "_Nt_" + num2str(num_saved_steps) + ...
@@ -54,14 +56,15 @@ u_mean = 0.07;
 
 %u=0.2*(2*rand(Nx,Ny)-1);
 
-tau = 100;
-alpha = 1.5;
+tau = 3.5;
+alpha = 2.0;
 
 if FigDraw
     figure;
 end
 
 for data_num = 1:data_size
+    tic;
     disp("data number = " + num2str(data_num))
 
     u = u_mean + u_mean*GRF(alpha, tau, Nx);
@@ -70,13 +73,12 @@ for data_num = 1:data_size
     %% Initial Preview
     if FigDraw
         clf;
-        set(gcf, 'Position', [100, 100, 900, 900]);
+        % set(gcf, 'Position', [100, 100, 900, 900]);
         surf(x,y,real(u'));
         colormap jet
         shading interp; 
         view(0,90); 
         axis image;
-        clim([u_mean-0.2 u_mean+0.2]);
         colorbar;
         pause(1)
     end
@@ -96,20 +98,37 @@ for data_num = 1:data_size
         v_hat=s_hat./(1.0/dt+(1-epsilon)*(pp2+qq2)+(pp2+qq2).^3);
         u=ifft2(v_hat);
         if (mod(iter,ns)==0) && FigDraw
-            disp(['Maximum = ' num2str(max(u, [],'all'))])
-            disp(['Minimum = ' num2str(min(u, [],'all'))])
+            %disp(['Maximum = ' num2str(max(u, [],'all'))])
+            %disp(['Minimum = ' num2str(min(u, [],'all'))])
     
             surf(x,y,real(u')); 
             colormap jet
             shading interp; 
             view(0,90);
             axis image;
-            clim([u_mean-0.2 u_mean+0.2]);
+            % clim([u_mean-0.2 u_mean+0.2]);
             colorbar;
             pause(0.01)
         end
     end
-
+    fwrite(fileID, all_iterations, 'single');
+    toc;
 end
 
-save("PFC2D_" + num2str(Nx) +  "_" + num2str(data_size) + ".mat", '-v7.3');
+%% Convert Binary Data to MAT File
+fclose(fileID);
+fileID = fopen(binary_filename, 'rb');
+if fileID == -1
+    error("Cannot open binary file for reading.");
+end
+
+phi_mat = matfile(mat_filename, 'Writable', true);
+phi_mat.phi = zeros([data_size, num_saved_steps, Nx, Ny], 'single');
+
+for data_num = 1:data_size
+    disp("Saving dataset " +  num2str(data_num));
+    data_chunk = fread(fileID, num_saved_steps * Nx * Ny, 'single');
+    phi_mat.phi(data_num, :, :, :) = reshape(data_chunk, [1, num_saved_steps, Nx, Ny]);
+end
+
+fclose(fileID);

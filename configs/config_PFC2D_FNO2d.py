@@ -1,28 +1,28 @@
 import numpy as np
 
 # General Setting
-gpu_number = 'cuda:0'  # 'cuda:1'
+gpu_number = 'cuda:2'  # 'cuda:1'
 torch_seed = 0
 numpy_seed = 0
 
 # Network Parameters
 nTrain = 4000
 nTest = 400
-batch_size = 50
+batch_size = 100
 learning_rate = 0.005
 weight_decay = 1e-4
-epochs = 1000
+epochs = 100
 iterations = epochs * (nTrain // batch_size)
-modes = 8
-width = 14
-width_q = 8
-width_h = 8
+modes = 14
+width = 16
+width_q = 16
+width_h = 16
 n_layers = 4
 
 # Discretization
 s = 64
 T_in = 1
-T_out = 100
+T_out = 10
 
 # Training Setting
 normalized = True
@@ -31,7 +31,7 @@ load_model = False  # False
 
 # Database
 parent_dir = './data/'
-matlab_dataset = 'SH2D_11100_Nt_101_Nx_64.mat'
+matlab_dataset = 'PFC2D_4440_Nt_101_Nx_64.mat'
 
 # Plotting
 index = 386  # 24  # 62  3  244
