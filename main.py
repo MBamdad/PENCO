@@ -16,10 +16,12 @@ from post_processing import plot_loss_trend, plot_field_trajectory, make_video, 
 # problem = 'AC3D'
 # problem = 'CH2DNL'
 # problem = 'SH2D'
-problem = 'PFC2D'
-# network_name = 'TNO2d'
+# problem = 'PFC2D'
+problem = 'MBE2D'
+
+network_name = 'TNO2d'
 # network_name = 'FNO3d'
-network_name = 'FNO2d'
+# network_name = 'FNO2d'
 
 # problem = 'CH2D'
 # problem = 'CH3D'
@@ -154,9 +156,9 @@ error = u_pred-u_exact
 fields = [u_exact, u_pred, error]
 field_names = ['Exact Value', 'Predicted Value', 'Error']
 # plot_range = [[-0.75, 0.75], [-0.75, 0.75], [-0.5, 0.5]]
-plot_range = [[-0.6, 0.6], [-0.6, 0.6], [-0.3, 0.3]]
+plot_range = [[-1.2, 1.2], [-1.2, 1.2], [-0.6, 0.6]]
 # plot_range = [[-1.0, 1.0], [-1.0, 1.0], [0.0, 1.0]]
-# plot_field_trajectory(cf.domain, fields, field_names, cf.time_steps, plot_range, problem)
+plot_field_trajectory(cf.domain, fields, field_names, cf.time_steps, plot_range, problem, plot_show=True)
 
 # make_video(u_pred, cf.domain, "predicted", plot_range, problem)
 # make_video(u_exact, cf.domain, "exact", plot_range, problem)

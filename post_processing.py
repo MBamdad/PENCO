@@ -32,6 +32,7 @@ def plot_field_trajectory(domain, fields, field_names, time_steps, plot_range, p
     interpolation_opt = 'lanczos' if interpolation else 'nearest'
 
     for time_step in time_steps:
+        v_min, v_max = None, None
         for field, field_name, domain_range in zip(fields, field_names, plot_range):
             shot = field[..., time_step]
             if shot.ndim == 3:
@@ -74,13 +75,24 @@ def plot_field_trajectory(domain, fields, field_names, time_steps, plot_range, p
 
             else:
                 plt.figure()
-                #plt.imshow(shot, extent=(domain[0], domain[1], domain[0], domain[1]), origin='lower', cmap=custom_cmap,
+                # plt.imshow(shot, extent=(domain[0], domain[1], domain[0], domain[1]), origin='lower', cmap=custom_cmap,
                 #           vmin=domain_range[0], vmax=domain_range[1], aspect='equal', interpolation=interpolation_opt)
 
-                plt.imshow(shot, extent=(domain[0], domain[1], domain[0], domain[1]), aspect='equal', cmap='plasma',
-                           vmin=domain_range[0], vmax=domain_range[1], interpolation=interpolation_opt)
+                # plt.imshow(shot, extent=(domain[0], domain[1], domain[0], domain[1]), aspect='equal', cmap='jet',
+                #            vmin=domain_range[0], vmax=domain_range[1], interpolation=interpolation_opt)
 
-                # plt.colorbar()
+                if v_min is None:
+                    v_min = shot.min()
+                    v_max = shot.max()
+
+                if field_name == 'Error':
+                    v_min = v_min * 0.25
+                    v_max = v_max * 0.25
+
+                plt.imshow(shot, extent=(domain[0], domain[1], domain[0], domain[1]), aspect='equal', cmap='jet',
+                           vmin=v_min, vmax=v_max, interpolation=interpolation_opt)
+
+                plt.colorbar()
                 plt.axis('off')
                 # plt.title(f'{field_name} at T={time_step+1}')
             time_step_formatted = str(time_step+1).zfill(3)

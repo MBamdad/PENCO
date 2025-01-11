@@ -1,12 +1,13 @@
+
 clc;
 clear;
-close all;
+% close all
 
 %% Parameter Initialization
 
 % Spatial Parameters
-Nx=32; 
-Ny=32; 
+Nx=64; 
+Ny=64; 
 Lx=2*pi; 
 Ly=2*pi; 
 hx=Lx/Nx; 
@@ -27,23 +28,33 @@ p2=(2*pi/Lx*[0:Nx/2 -Nx/2+1:-1]).^2;
 q2=(2*pi/Ly*[0:Ny/2 -Ny/2+1:-1]).^2; 
 [pp2,qq2]=ndgrid(p2,q2);
 
-%u=1*(sin(3*xx).*sin(2*yy)+sin(5*xx).*sin(5*yy));
+u=1*(sin(3*xx).*sin(2*yy)+sin(5*xx).*sin(5*yy));
 %u=1*(2*rand(Nx,Ny)-1);
 tau = 300%1.0;%2.0;
 alpha = 10%1.5;%2.5;
-u = 2*GRF(alpha, tau, Nx);
+tau = 2.5;
+alpha = 2.0;
+tau = 150.;
+alpha = 100.0;
+u = 10*GRF(alpha, tau, Nx);
 
 % Time Discritization
-dt=0.001; 
-T=15; 
-Nt=round(T/dt); 
-ns=Nt/1000;
+dt=0.0001; 
+Nt = 50000;
+T=Nt*dt; 
+Np=100;
+ns=Nt/Np;
+
+iter_draw = 0;
 
 figure(1); clf; colormap jet;
-surf(x,y,real(u')); axis image; view(0,90); shading interp;
+surf(x,y,real(u')); 
+axis image; 
+%view(0,90); 
+shading interp;
 colorbar; 
 %caxis([-1 1]); 
-pause(1);
+pause(3);
 for iter=1:Nt
     disp("Iteration Number = " + num2str(iter))
     u=real(u); tu=fft2(u);
@@ -53,11 +64,16 @@ for iter=1:Nt
     v_hat=s_hat./(1/dt-(pp2+qq2)+epsilon*(pp2+qq2).^2);
     u=ifft2(v_hat);
     if (mod(iter,ns)==0)
+        iter_draw = iter_draw + 1;
+        disp("Drawing Iteration Number = " + num2str(iter_draw))
         clf;
-        surf(x,y,real(u')); view(0,90); shading interp;
-        axis image; colorbar; 
+        surf(x,y,real(u')); 
+        %view(0,90); 
+        shading interp;
+        axis image; 
+        colorbar; 
         %caxis([-1 1]);
-        pause(0.01)
+        pause(1)
     end
 end
 

@@ -11,27 +11,31 @@ width_q = 32
 width_h = 16
 2539703
 
-The average testing error is 0.027059923857450485
-Std. deviation of testing error is 0.01980009116232395
+
 ----------------------------------------------
-model = TNO2d_PFC2D_S64_T1to50_width16_modes12_q32_h16.pt
-number of epoch = 200
-batch size = 100
 nTrain = 4000
 nTest = 400
+batch_size = 100
 learning_rate = 0.005
-n_layers = 4
+weight_decay = 1e-4
+epochs = 200
+iterations = epochs * (nTrain // batch_size)
+modes = 12
+width = 20  # 32
 width_q = 32
 width_h = 16
-651059
+n_layers = 4
 
-The average testing error is 0.005057875066995621
-Std. deviation of testing error is 0.0021678071934729815
+# Discretization
+s = 64
+T_in = 1
+T_out = 50
+991027
+
 ----------------------------------------------
 
 
 """
-
 import numpy as np
 
 # General Setting
@@ -42,15 +46,15 @@ numpy_seed = 0
 # Network Parameters
 nTrain = 4000
 nTest = 400
-batch_size = 100
+batch_size = 10#25
 learning_rate = 0.005
 weight_decay = 1e-4
-epochs = 100
+epochs = 1000
 iterations = epochs * (nTrain // batch_size)
-modes = 12
-width = 32
-width_q = 32
-width_h = 16
+modes = 8
+width = 16
+width_q = 16
+width_h = 8
 n_layers = 4
 
 # Discretization
@@ -65,13 +69,13 @@ load_model = True  # False
 
 # Database
 parent_dir = './data/'
-matlab_dataset = 'PFC2D_4440_Nt_101_Nx_64.mat'
+matlab_dataset = 'MBE2D_4440_Nt_101_Nx_64.mat'
 
 # Plotting
-index = 200  # 110  # 200
+index = 386  # 24  # 62  3  244
 domain = [-np.pi, np.pi]
 # time_steps = [29, 35, 39, 45, 49]
 # time_steps = [0, 9, 19, 29, 39, 49, 59, 69, 79, 89, 99]
-time_steps = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 14, 19, 24, 29, 34, 39, 44, 49,
+time_steps = [0, 4, 9, 14, 19, 24, 29, 34, 39, 44, 49,
               54, 59, 64, 69, 74, 79, 84, 89, 94, 99]
 # time_steps = [0, 2, 4, 6, 8, 9]
