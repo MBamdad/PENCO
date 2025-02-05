@@ -2,14 +2,18 @@ import os
 import cv2
 import vtk
 import numpy as np
+import matplotlib
+
+matplotlib.use('TkAgg')  # or 'Agg', depending on your needs
 import matplotlib.pyplot as plt
 from vtk.util import numpy_support
+# print(dir(numpy_support))
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from skimage import measure
 from matplotlib.cm import ScalarMappable
 
-
+'''''
 def plot_loss_trend(losses, labels, problem):
     folder = problem + "/plots"
     fig_font = "DejaVu Serif"
@@ -23,8 +27,33 @@ def plot_loss_trend(losses, labels, problem):
     plt.savefig(plot_name + '.png', dpi=600, bbox_inches='tight')
     plt.show()
 
+    '''
 
-def plot_field_trajectory(domain, fields, field_names, time_steps, plot_range, problem, plot_show=True, interpolation=True):
+
+def plot_loss_trend(losses, labels, problem):
+    folder = os.path.join(problem, "plots")
+    os.makedirs(folder, exist_ok=True)
+
+    fig_font = "DejaVu Serif"
+    plt.rcParams["font.family"] = fig_font
+
+    plt.figure(figsize=(3.5, 4))
+    for loss, label in zip(losses, labels):
+        plt.semilogy(loss, label=label)
+    plt.legend()
+
+    plot_name = os.path.join(folder, "LossTrend.png")
+    plt.savefig(plot_name, dpi=600, bbox_inches='tight')
+
+    # Optional: avoid plt.show() in environments with display issues
+    try:
+        plt.show()
+    except AttributeError:
+        print(f"Error showing plot. The loss trend is saved at {plot_name}.")
+
+
+def plot_field_trajectory(domain, fields, field_names, time_steps, plot_range, problem, plot_show=True,
+                          interpolation=True):
     colors = ["black", "yellow"] if fields[0].ndim == 3 else ["white", "blue"]
     custom_cmap = LinearSegmentedColormap.from_list("two_phase", colors, N=100)
     folder = problem + "/plots/"
@@ -51,7 +80,8 @@ def plot_field_trajectory(domain, fields, field_names, time_steps, plot_range, p
 
                 # cbar = plt.colorbar(sm, ax=ax, shrink=0.6)
                 # cbar.set_label("Scalar Field Value", fontsize=12)
-                verts, faces, _, values = measure.marching_cubes(shot.numpy(), level=np.mean([shot.min(), shot.max()]), spacing=(hx, hy, hz), allow_degenerate=False)
+                verts, faces, _, values = measure.marching_cubes(shot.numpy(), level=np.mean([shot.min(), shot.max()]),
+                                                                 spacing=(hx, hy, hz), allow_degenerate=False)
                 face_colors = custom_cmap(norm(values))
                 p1 = Poly3DCollection(verts[faces], alpha=0.2, facecolors=face_colors)
 
@@ -95,7 +125,7 @@ def plot_field_trajectory(domain, fields, field_names, time_steps, plot_range, p
                 plt.colorbar()
                 plt.axis('off')
                 # plt.title(f'{field_name} at T={time_step+1}')
-            time_step_formatted = str(time_step+1).zfill(3)
+            time_step_formatted = str(time_step + 1).zfill(3)
             plot_name = folder + f'{field_name}_at_T_{time_step_formatted}'
             plt.savefig(plot_name + '.png', dpi=300, bbox_inches='tight')
             if plot_show:

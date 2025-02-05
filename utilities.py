@@ -189,7 +189,7 @@ class LpLoss(object):
         self.size_average = size_average
 
     def abs(self, x, y):
-        num_examples = x.size()[0]
+        num_examples = x.size()[0] # number of rows
 
         # Assume uniform mesh
         h = 1.0 / (x.size()[1] - 1.0)
@@ -344,6 +344,7 @@ class ImportDataset(Dataset):
 
         matlab_dataset = parent_dir + matlab_dataset
         python_dataset = matlab_dataset.replace('.mat', '.pt')
+        #python_dataset = matlab_dataset.replace('.npz', '.pt')
         os.makedirs(parent_dir, exist_ok=True)
 
         if os.path.exists(python_dataset):
@@ -361,8 +362,8 @@ class ImportDataset(Dataset):
         self.x = self.data[:, 0:self.T_in, *[slice(None)] * (self.data.ndim - 3)].permute(*permute_order)
         self.y = self.data[:, self.T_in:self.T_in + self.T_out, *[slice(None)] * (
                 self.data.ndim - 3)].permute(*permute_order)
-        print(self.x.shape)
-        print(self.y.shape)
+       # print(self.x.shape)
+       # print(self.y.shape)
         if self.normalized:
             self.make_normal()
 

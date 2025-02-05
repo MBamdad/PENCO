@@ -9,23 +9,26 @@ from training import train_fno, train_fno_time
 from torch.utils.data import DataLoader, random_split
 from utilities import ImportDataset, count_params, LpLoss, ModelEvaluator
 from post_processing import plot_loss_trend, plot_field_trajectory, make_video, save_vtk
+import time  # Import the time module at the beginning of the script
+
 ################################################################
 # Problem Definition
 ################################################################
 # problem = 'AC2D'
-# problem = 'AC3D'
+#problem = 'AC3D'
 # problem = 'CH2DNL'
 # problem = 'SH2D'
+#problem = 'SH3D'
 # problem = 'PFC2D'
-problem = 'MBE2D'
+#problem = 'MBE2D'
 
-network_name = 'TNO2d'
+#network_name = 'TNO2d'
 # network_name = 'FNO3d'
 # network_name = 'FNO2d'
 
 # problem = 'CH2D'
-# problem = 'CH3D'
-# network_name = 'TNO3d'
+problem = 'CH3D'
+network_name = 'TNO3d'
 
 print(f"problem = {problem}")
 print(f"network = {network_name}")
@@ -34,8 +37,13 @@ cf = importlib.import_module(f"configs.config_{problem}_{network_name}")
 network = getattr(importlib.import_module('networks'), network_name)
 torch.manual_seed(cf.torch_seed)
 np.random.seed(cf.numpy_seed)
-device = torch.device(cf.gpu_number if torch.cuda.is_available() else 'cpu')
+#device = torch.device(cf.gpu_number if torch.cuda.is_available() else 'cpu')
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Device: ", device)
+
+# width_q = 32
+start_time = time.time()
+
 ################################################################
 # load data and data normalization
 ################################################################
@@ -128,6 +136,10 @@ results = evaluator.evaluate(loss_fn=myloss)
 inp = results['input']
 pred = results['prediction']
 exact = results['exact']
+# Record the end time
+end_time = time.time()
+# Print the total execution time
+print(f"Total Execution Time: {end_time - start_time:.2f} seconds")
 ################################################################
 # post-processing
 ################################################################

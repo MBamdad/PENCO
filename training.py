@@ -25,13 +25,17 @@ def train_fno(model, myloss, epochs, batch_size, train_loader, test_loader,
             x, y = x.to(device), y.to(device)
 
             optimizer.zero_grad()
+            #print(f"Input shape: {x.shape}, Device: {x.device}")
             out = model(x)
             if normalized:
                 out = y_normalizer.decode(out)
                 y = y_normalizer.decode(y)
+            #print(f"Shape of out: {out.shape}, Shape of y: {y.shape}")
+            # mse = F.mse_loss(out.view(batch_size, -1), y.view(batch_size, -1), reduction='mean')
+            # loss = myloss(out.view(batch_size, -1), y.view(batch_size, -1))
+            mse = F.mse_loss(out.flatten(start_dim=1), y.flatten(start_dim=1), reduction='mean')
+            loss = myloss(out.flatten(start_dim=1), y.flatten(start_dim=1))
 
-            mse = F.mse_loss(out.view(batch_size, -1), y.view(batch_size, -1), reduction='mean')
-            loss = myloss(out.view(batch_size, -1), y.view(batch_size, -1))
             loss.backward()
 
             optimizer.step()
@@ -50,7 +54,8 @@ def train_fno(model, myloss, epochs, batch_size, train_loader, test_loader,
                     out = y_normalizer.decode(out)
                     y = y_normalizer.decode(y)
 
-                test_l2 += myloss(out.view(batch_size, -1), y.view(batch_size, -1)).item()
+                #test_l2 += myloss(out.view(batch_size, -1), y.view(batch_size, -1)).item()
+                test_l2 += myloss(out.flatten(start_dim=1), y.flatten(start_dim=1)).item()
 
         train_mse /= len(train_loader)
         train_l2 /= (batch_size * len(train_loader))
@@ -61,7 +66,11 @@ def train_fno(model, myloss, epochs, batch_size, train_loader, test_loader,
         test_l2_log.append(test_l2)
 
         t2 = default_timer()
-        print(ep, t2 - t1, train_mse, train_l2, test_l2)
+        #print(ep, t2 - t1, train_mse, train_l2, test_l2)
+        if ep == 0:  # Print the header row once
+            print("No. Epoch   Time (s)       Train MSE      Train L2       Test L2")
+
+        print(f"{ep:<10} {t2 - t1:<13.6f} {train_mse:<13.10f} {train_l2:<13.10f} {test_l2:<13.10f}")
 
     return model, train_mse_log, train_l2_log, test_l2_log
 

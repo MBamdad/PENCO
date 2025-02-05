@@ -43,7 +43,7 @@ num_saved_steps = 101;
 ns=Nt/(num_saved_steps-1);
 
 % Dataset
-data_size = 4400;
+data_size = 2000 %8000;
 binary_filename = "CH3D_" + num2str(data_size) + "_Nt_" + num2str(num_saved_steps) + ...
                   "_Nx_" + num2str(Nx) + ".bin";
 mat_filename = "CH3D_" + num2str(data_size) + "_Nt_" + num2str(num_saved_steps) + ...
@@ -56,10 +56,8 @@ if fileID == -1
 end
 
 %% Initial Condition
-tau = 10;
-alpha = 5.5;
-tau = 400;
-alpha = 115;
+tau = 45; % 400;
+alpha = 11; %115;
 
 if FigDraw
     figure;
