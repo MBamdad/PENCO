@@ -5,14 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="69f06a2e-e075-4f1f-8925-28211e19f97d" name="Changes" comment="added PFC2D">
-      <change afterPath="$PROJECT_DIR$/Test2.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/MatlabCode/CH3D_rand.m" beforeDir="false" afterPath="$PROJECT_DIR$/MatlabCode/CH3D_rand.m" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_CH3D_TNO3d.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config_CH3D_TNO3d.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_SH3D_TNO3d.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config_SH3D_TNO3d.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utilities.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -319,6 +312,7 @@
       <workItem from="1738703726377" duration="1677000" />
       <workItem from="1738774383038" duration="2249000" />
       <workItem from="1738787637783" duration="7013000" />
+      <workItem from="1738962434877" duration="1153000" />
     </task>
     <task id="LOCAL-00001" summary="Initial Commit">
       <option name="closed" value="true" />
@@ -424,7 +418,23 @@
       <option name="project" value="LOCAL" />
       <updated>1738796104012</updated>
     </task>
-    <option name="localTasksCounter" value="14" />
+    <task id="LOCAL-00014" summary="added PFC2D">
+      <option name="closed" value="true" />
+      <created>1738962464719</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1738962464719</updated>
+    </task>
+    <task id="LOCAL-00015" summary="added PFC2D">
+      <option name="closed" value="true" />
+      <created>1738962748829</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1738962748829</updated>
+    </task>
+    <option name="localTasksCounter" value="16" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

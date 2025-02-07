@@ -36,6 +36,7 @@ k2z=kz.^2;
 [kxx,kyy,kzz]=ndgrid(k2x,k2y,k2z);
 
 % Time Discretization
+
 dt=0.0025; % 0.01 
 Nt=200; %1000; 
 T=round(Nt*dt); 
