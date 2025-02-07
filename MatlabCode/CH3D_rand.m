@@ -8,12 +8,12 @@ fclose('all');
 FigDraw = 0;
 
 % Spatial Parameters
-Nx=32;
-Ny=32;
-Nz=32;
-Lx=1.1;
-Ly=1.1;
-Lz=1.1;
+Nx=64; %32;
+Ny=64; %32;
+Nz=64; %32;
+Lx=1; %1.1;
+Ly=1; %1.1;
+Lz=1; %1.1;
 hx=Lx/Nx;
 hy=Ly/Ny;
 hz=Lz/Nz;
@@ -36,14 +36,14 @@ k2z=kz.^2;
 [kxx,kyy,kzz]=ndgrid(k2x,k2y,k2z);
 
 % Time Discretization
-dt=0.01; 
-Nt=1000; 
-T=Nt*dt; 
+dt=0.0025; % 0.01 
+Nt=200; %1000; 
+T=round(Nt*dt); 
 num_saved_steps = 101;
 ns=Nt/(num_saved_steps-1);
 
 % Dataset
-data_size = 2000 %8000;
+data_size = 1200 %2000 %8000;
 binary_filename = "CH3D_" + num2str(data_size) + "_Nt_" + num2str(num_saved_steps) + ...
                   "_Nx_" + num2str(Nx) + ".bin";
 mat_filename = "CH3D_" + num2str(data_size) + "_Nt_" + num2str(num_saved_steps) + ...
@@ -56,8 +56,8 @@ if fileID == -1
 end
 
 %% Initial Condition
-tau = 45; % 400;
-alpha = 11; %115;
+tau = 15; %45; % 400;
+alpha = 4; %11; %115;
 
 if FigDraw
     figure;

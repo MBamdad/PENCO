@@ -9,8 +9,13 @@ import numpy as np
 import os
 import h5py
 
+
+# Get file size in MB
+file_size_MB = os.path.getsize('data/SH3D_600_Nt_11_Nx_80.mat') / (1024 * 1024)
+print(f"File successfully converted! Size: {file_size_MB:.2f} MB")
+
 # Open the .mat file
-with h5py.File('data/CH3D_2000_Nt_101_Nx_32.mat', 'r') as f:
+with h5py.File('data/SH3D_600_Nt_11_Nx_80.mat', 'r') as f:
     phi = f['phi']  # Access the dataset
 
     print("Shape of phi:", phi.shape)
@@ -19,13 +24,14 @@ with h5py.File('data/CH3D_2000_Nt_101_Nx_32.mat', 'r') as f:
     # Print a small subset of the data
     sample_data = phi[0, 0, 0, :5, :5]  # Extract a small portion
     print("Sample values:\n", sample_data)
-
+    # Print attributes (if any)
+    print("Attributes of phi:", dict(phi.attrs))
 # Get file size in MB
 file_size_MB = os.path.getsize('data/CH3D_2000_Nt_101_Nx_32.mat') / (1024 * 1024)
 print(f"Compressed file size: {file_size_MB:.2f} MB")
 
 # Open the .mat file
-with h5py.File('data/CH3D_2000_Nt_101_Nx_32.mat', 'r') as f:
+with h5py.File('data/CH3D_2000_Ntt_101_Nx_32.mat', 'r') as f:
     phi = f['phi']  # Access the dataset
 
     print("Shape of phi:", phi.shape)
@@ -55,9 +61,7 @@ np_array = tensor.cpu().numpy()  # Move to CPU if needed and convert
 # Save the NumPy array to an .npz file
 np.savez('CH3D_8000_Nt_101_Nx_32.npz', data=np_array)
 
-# Get file size in MB
-file_size_MB = os.path.getsize('CH3D_8000_Nt_101_Nx_32.npz') / (1024 * 1024)
-print(f"File successfully converted! Size: {file_size_MB:.2f} MB")
+
 '''
 import h5py
 

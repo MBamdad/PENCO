@@ -92,9 +92,13 @@ class UnitGaussianNormalizer(object):
 
     def decode(self, x, sample_idx=None):
         # sample_idx is the spatial sampling mask
+        global std, mean
         if sample_idx is None:
             std = self.std + self.eps  # n
             mean = self.mean
+            #print("x shape:", x.shape)
+            #print("std shape:", std.shape)
+            #print("mean shape:", mean.shape)
         else:
             if self.mean.ndim == sample_idx.ndim or self.time_last:
                 std = self.std[sample_idx] + self.eps  # batch*n
@@ -103,6 +107,7 @@ class UnitGaussianNormalizer(object):
                 std = self.std[..., sample_idx] + self.eps  # T*batch*n
                 mean = self.mean[..., sample_idx]
         # x is in shape of batch*(spatial discretization size) or T*batch*(spatial discretization size)
+
         x = (x * std) + mean
         return x
 
