@@ -339,8 +339,11 @@ def count_params(model):
 
 class ImportDataset(Dataset):
     def __init__(self, parent_dir, matlab_dataset, normalized, T_in, T_out):
-        self.y = None
-        self.x = None
+        self.y = None # Stores target
+        self.x = None # Stores input
+        '''
+        The values for x and y are not yet available but will be assigned later (inside the set_data() method).
+        '''
         self.T_in = T_in
         self.T_out = T_out
         self.normalized = normalized

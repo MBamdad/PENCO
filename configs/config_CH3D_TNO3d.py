@@ -6,22 +6,22 @@ torch_seed = 0
 numpy_seed = 0
 
 # Network Parameters
-nTrain = 1000 # 7500
-nTest = 200 #500
-batch_size = 8 # 5 # 50
+nTrain = 1200 # 7500
+nTest =  300 #500
+batch_size = 50 # 5 # 50
 learning_rate = 0.001 # 0.005 # 0.001
 weight_decay = 1e-3 # 1e-3 # 1e-4
-epochs = 50 # 100 # 1000
+epochs = 25 # 100 # 1000
 iterations = epochs * (nTrain // batch_size)
-modes =  4 # 16
-width =  8 # 32
-width_q =   width # 2 * width #
-width_h = width//4 # width #
-n_layers = 4 # 8
+modes = 16 # 10 # 16
+width = 16 # 32
+width_q = width # 2 * width #
+width_h = width//2 # width//4 # width #
+n_layers = 5 # 5 # 8
 
 # Discretization
 
-s = 64 # 64
+s = 32 # 64
 T_in = 1
 T_out = 100
 
@@ -33,8 +33,8 @@ load_model = True # False #True
 # Database
 parent_dir = './data/'
 #matlab_dataset = 'CH3D_8000_Nt_101_Nx_32.mat'
-matlab_dataset = 'CH3D_1200_Nt_101_Nx_64.mat'
-#matlab_dataset = 'CH3D_8000_Nt_101_Nx_32.h5'
+matlab_dataset = 'CH3D_1500_Nt_101_Nx_32.mat'
+#matlab_dataset = 'CH3D_2000_Nt_101_Nx_64.mat'
 #matlab_dataset = 'CH3D_8000_Nt_101_Nx_32_compressed.npz'
 # Plotting
 index = 62  # 24 # 62

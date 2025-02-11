@@ -8,12 +8,12 @@ fclose('all');
 FigDraw = 0;
 
 % Spatial Parameters
-Nx=64; %32;
-Ny=64; %32;
-Nz=64; %32;
-Lx=1; %1.1;
-Ly=1; %1.1;
-Lz=1; %1.1;
+Nx=32; %64; %32;
+Ny=32;%64; %32;
+Nz=32; %64; %32;
+Lx=3; %1; %1.1;
+Ly=3; %1; %1.1;
+Lz=3; %1; %1.1;
 hx=Lx/Nx;
 hy=Ly/Ny;
 hz=Lz/Nz;
@@ -44,7 +44,7 @@ num_saved_steps = 101;
 ns=Nt/(num_saved_steps-1);
 
 % Dataset
-data_size = 1200 %2000 %8000;
+data_size = 1500 %2000 %8000;
 binary_filename = "CH3D_" + num2str(data_size) + "_Nt_" + num2str(num_saved_steps) + ...
                   "_Nx_" + num2str(Nx) + ".bin";
 mat_filename = "CH3D_" + num2str(data_size) + "_Nt_" + num2str(num_saved_steps) + ...
@@ -57,8 +57,8 @@ if fileID == -1
 end
 
 %% Initial Condition
-tau = 15; %45; % 400;
-alpha = 4; %11; %115;
+tau = 3.5; %5; %15; %45; % 400;
+alpha = 2; %4 %11; %115;
 
 if FigDraw
     figure;

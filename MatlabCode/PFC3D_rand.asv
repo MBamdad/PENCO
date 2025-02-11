@@ -36,15 +36,14 @@ r2=r.^2;
 [pp2,qq2,rr2]=ndgrid(p2,q2,r2);
 
 % Time Discretization
-dt=0.05;
 dt=0.1;
-Nt = 10000;
+Nt = 200;
 T=Nt*dt;
 num_saved_steps = 101;
 ns=Nt/(num_saved_steps-1);
 
 % Dataset
-data_size = 1200;
+data_size = 1500;
 binary_filename = "PFC3D_" + num2str(data_size) + "_Nt_" + num2str(num_saved_steps) + "_Nx_" + num2str(Nx) + ".bin";
 mat_filename = "PFC3D_" + num2str(data_size) + "_Nt_" + num2str(num_saved_steps) + "_Nx_" + num2str(Nx) + ".mat";
 
@@ -57,11 +56,11 @@ end
 %% Initial Condition
 
 u_mean = 0.07;
-tau = 3.5;
-alpha = 2.0;
+tau = 180; %30; % 300 % 3.5;
+alpha = 60; %11; %110 % 2.0;
 
 for data_num = 1:data_size
-    tic;
+    %tic;
     disp("data number = " + num2str(data_num))
     
     u = u_mean + u_mean*GRF3D(alpha, tau, Nx);
@@ -81,7 +80,7 @@ for data_num = 1:data_size
         u=ifftn(v_hat);
     end
     fwrite(fileID, all_iterations, 'single');
-    toc;
+    %toc;
 end
 
 %% Convert Binary Data to MAT File
@@ -90,7 +89,6 @@ fileID = fopen(binary_filename, 'rb');
 if fileID == -1
     error("Cannot open binary file for reading.");
 end
-Elapsed
 
 phi_mat = matfile(mat_filename, 'Writable', true);
 phi_mat.phi = zeros([data_size, num_saved_steps, Nx, Ny, Nz], 'single');

@@ -18,8 +18,9 @@ import time  # Import the time module at the beginning of the script
 #problem = 'AC3D'
 # problem = 'CH2DNL'
 # problem = 'SH2D'
-# problem = 'SH3D'
+#problem = 'SH3D'
 # problem = 'PFC2D'
+problem = 'PFC3D'
 #problem = 'MBE2D'
 
 #network_name = 'TNO2d'
@@ -27,18 +28,19 @@ import time  # Import the time module at the beginning of the script
 # network_name = 'FNO2d'
 
 # problem = 'CH2D'
-problem = 'CH3D'
+#problem = 'CH3D'
 network_name = 'TNO3d'
 
 print(f"problem = {problem}")
 print(f"network = {network_name}")
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-cf = importlib.import_module(f"configs.config_{problem}_{network_name}")
-network = getattr(importlib.import_module('networks'), network_name)
+cf = importlib.import_module(f"configs.config_{problem}_{network_name}") # configuration file
+# above line means: import configs.config_PFC3D_TNO3d as cf
+network = getattr(importlib.import_module('networks'), network_name) # from networks import TNO3d
 torch.manual_seed(cf.torch_seed)
 np.random.seed(cf.numpy_seed)
 #device = torch.device(cf.gpu_number if torch.cuda.is_available() else 'cpu')
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 print("Device: ", device)
 
 # width_q = 32
@@ -61,9 +63,11 @@ print(f"width_h = {cf.width_h}")
 
 model_path = os.path.join(model_dir, model_name)
 os.makedirs(model_dir, exist_ok=True)
+# dataset creates an instance of the ImportDataset class, initializing it with parameters from cf
 dataset = ImportDataset(cf.parent_dir, cf.matlab_dataset, cf.normalized, cf.T_in, cf.T_out)
 
 train_dataset, test_dataset, _ = random_split(dataset, [cf.nTrain, cf.nTest, len(dataset) - cf.nTrain - cf.nTest])
+# to see train_dataset values: print("train_dataset subset:", [train_dataset[i] for i in range(len(train_dataset))])
 normalizers = [dataset.normalizer_x, dataset.normalizer_y] if cf.normalized is True else None
 
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=cf.batch_size, shuffle=True)

@@ -264,6 +264,7 @@ class FNO3d(nn.Module):
         super(FNO3d, self).__init__()
 
         """
+        The FNO3d class is a deep learning model designed for solving spatiotemporal problems. 
         The overall network. It contains 4 layers of the Fourier layer.
         1. Lift the input to the desire channel dimension by self.fc0 .
         2. 4 layers of the integral operators u' = (W + K)(u).
@@ -286,7 +287,7 @@ class FNO3d(nn.Module):
         self.padding = 6  # pad the domain if input is non-periodic
         self.n_layers = n_layers
 
-        self.p = nn.Linear(self.T_in + 3, self.width)  # input channel is 12: the solution of the first 10 time_steps + 3 locations (u(1, x, y), ..., u(10, x, y),  x, y, t)
+        self.p = nn.Linear(self.T_in + 3, self.width)  # Lifting Layer: input channel is 12: the solution of the first 10 time_steps + 3 locations (u(1, x, y), ..., u(10, x, y),  x, y, t)
 
         self.convs = nn.ModuleList(
             [SpectralConv3d(self.width, self.width, self.modes1, self.modes2, self.modes3) for _ in range(n_layers)])
@@ -321,6 +322,8 @@ class TNO3d(FNO3d):
     def __init__(self, modes1, modes2, modes3, width, width_q, width_h, T_in, T_out, n_layers):
         super(TNO3d, self).__init__(modes1, modes2, modes3, width, width_q, T_in, T_out, n_layers)
         """
+        The super() function calls the parent class (FNO3d) constructor to initialize 
+        the parameters that are inherited from the parent class.
         input: the initial condition and locations (a(x, y, z), x, y, z)
         input shape: (batchsize, x=s, y=s, z=s, c=4)
         output: the solution 

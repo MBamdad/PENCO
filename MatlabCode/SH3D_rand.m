@@ -6,12 +6,12 @@ fclose('all');
 %% Parameter Initialization
 
 % Spatial Parameters
-Nx = 80; % 64; % Grid size in x direction
-Ny = 80; % 64; % Grid size in y direction
-Nz = 80; % 64; % Grid size in z direction
-Lx = 90; % 64 % Domain size in x direction
-Ly = 90; % 64; % Domain size in y direction
-Lz = 90; % 64; % Domain size in z direction
+Nx = 32; %80 % 64; % Grid size in x direction
+Ny = Nx; %80; % 64; % Grid size in y direction
+Nz = Nx; %80; % 64; % Grid size in z direction
+Lx = 3; %90; % 64 % Domain size in x direction
+Ly = 3; %90; % 64; % Domain size in y direction
+Lz = 3; %90; % 64; % Domain size in z direction
 hx = Lx / Nx;
 hy = Ly / Ny;
 hz = Lz / Nz;
@@ -34,14 +34,13 @@ k2z = kz.^2;
 [kxx, kyy, kzz] = ndgrid(k2x, k2y, k2z);
 
 % Time Discretization
-dt = 0.01; % Time step
-Nt = 5000; %1000; % Total number of time steps
+dt = 0.0025; % Time step
+Nt = 200; %1000; % Total number of time steps
 num_saved_steps = 101; %101; % Number of saved time steps
 ns = Nt / (num_saved_steps - 1); % Save interval
-t = 0;
 
 % Dataset
-data_size = 600; %1200; % Number of random datasets
+data_size = 600; % Number of random datasets
 binary_filename = "SH3D_" + num2str(data_size) + "_Nt_" + num2str(num_saved_steps) + ...
                   "_Nx_" + num2str(Nx) + ".bin";
 mat_filename = "SH3D_" + num2str(data_size) + "_Nt_" + num2str(num_saved_steps) + ...
