@@ -266,10 +266,10 @@
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Python.CH3D_TNO3d" />
       <item itemvalue="Python.PFC3D" />
-      <item itemvalue="Python.SH3D" />
       <item itemvalue="Python.Test3" />
+      <item itemvalue="Python.CH3D_TNO3d" />
+      <item itemvalue="Python.SH3D" />
       <item itemvalue="Python.Test_Run" />
     </list>
   </component>
