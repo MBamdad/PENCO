@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader, random_split
 from utilities import ImportDataset, count_params, LpLoss, ModelEvaluator
 from post_processing import plot_loss_trend, plot_field_trajectory, make_video, save_vtk
 import time  # Import the time module at the beginning of the script
-
+from torch_optimizer import Lamb
 ################################################################
 # Problem Definition
 ################################################################
@@ -18,10 +18,11 @@ import time  # Import the time module at the beginning of the script
 #problem = 'AC3D'
 # problem = 'CH2DNL'
 # problem = 'SH2D'
-#problem = 'SH3D'
+problem = 'SH3D'
 # problem = 'PFC2D'
-problem = 'PFC3D'
+#problem = 'PFC3D'
 #problem = 'MBE2D'
+#problem = 'MBE3D'
 
 #network_name = 'TNO2d'
 # network_name = 'FNO3d'
@@ -106,6 +107,10 @@ else:
 # Define optimizer, scheduler, and loss function
 optimizer = torch.optim.Adam(model.parameters(), lr=cf.learning_rate, weight_decay=cf.weight_decay)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cf.iterations)
+#optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-5)
+#optimizer = Lamb(model.parameters(), lr=cf.learning_rate, weight_decay=cf.weight_decay)
+#scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10)
+
 myloss = LpLoss(size_average=False)
 
 # Train the model

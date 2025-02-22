@@ -11,12 +11,12 @@ import h5py
 
 
 # Get file size in MB
-file_size_MB = os.path.getsize('data/SH3D_600_Nt_101_Nx_80.mat') / (1024 * 1024)
+#file_size_MB = os.path.getsize('data/SH3D_600_Nt_101_Nx_80.mat') / (1024 * 1024)
 
-print(f"File successfully converted! Size: {file_size_MB:.2f} MB")
+#print(f"File successfully converted! Size: {file_size_MB:.2f} MB")
 
 # Open the .mat file
-with h5py.File('data/SH3D_600_Nt_11_Nx_80.mat', 'r') as f:
+with h5py.File('data/CH3D_1500_Nt_101_Nx_32.mat', 'r') as f:
     phi = f['phi']  # Access the dataset
 
     print("Shape of phi:", phi.shape)

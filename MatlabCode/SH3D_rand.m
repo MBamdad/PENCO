@@ -4,6 +4,7 @@ close all;
 fclose('all');
 
 %% Parameter Initialization
+FigDraw = 0 ; % Enable/Disable visualization (1 = On, 0 = Off)
 
 % Spatial Parameters
 Nx = 32; %80 % 64; % Grid size in x direction
@@ -34,13 +35,13 @@ k2z = kz.^2;
 [kxx, kyy, kzz] = ndgrid(k2x, k2y, k2z);
 
 % Time Discretization
-dt = 0.0025; % Time step
-Nt = 200; %1000; % Total number of time steps
+dt = 0.0000002; % Time step
+Nt = 100; %1000; % Total number of time steps
 num_saved_steps = 101; %101; % Number of saved time steps
 ns = Nt / (num_saved_steps - 1); % Save interval
 
 % Dataset
-data_size = 600; % Number of random datasets
+data_size = 1500; % Number of random datasets
 binary_filename = "SH3D_" + num2str(data_size) + "_Nt_" + num2str(num_saved_steps) + ...
                   "_Nx_" + num2str(Nx) + ".bin";
 mat_filename = "SH3D_" + num2str(data_size) + "_Nt_" + num2str(num_saved_steps) + ...
@@ -53,19 +54,25 @@ if fileID == -1
 end
 
 %% Random Initial Condition Parameters
-tau = 2; % 10; % Controls length scale of fluctuations
-alpha = 3; % Controls smoothness of fluctuations
+tau = 315; % 10; % Controls length scale of fluctuations
+alpha = 115; % Controls smoothness of fluctuations
 
 %% Simulation Loop
+if FigDraw
+    figure;
+end
+
 for data_num = 1:data_size
     disp("Data number = " + num2str(data_num));
 
     % Generate random initial condition using GRF3D
     norm_a = GRF3D(alpha, tau, Nx);
-    u = zeros(Nx, Ny, Nz);
-    u(norm_a >= 0) = 1;
+    %u = zeros(Nx, Ny, Nz);
+    %u(norm_a >= 0) = 1;
+    %u(norm_a < 0) = -1;
+    norm_a = norm_a - 0.85* std(norm_a(:));   %
+    u = ones(Nx,Ny,Nz);
     u(norm_a < 0) = -1;
-
     % Initialize storage for saving time steps
     all_iterations = zeros(num_saved_steps, Nx, Ny, Nz, 'single');
 
@@ -75,6 +82,20 @@ for data_num = 1:data_size
         if iter == 1 || mod(iter, ns) == 0 || iter == Nt
             all_iterations(save_idx, :, :, :) = u;
             save_idx = save_idx + 1;
+        end
+
+        %% Visualization (Plot Section)
+        if FigDraw && mod(iter, ns) == 0
+            clf;
+            p1 = patch(isosurface(xx, yy, zz, real(u), 0));
+            set(p1, 'FaceColor', 'r', 'EdgeColor', 'none'); % Blue surface
+            daspect([1 1 1]);
+            camlight;
+            lighting phong;
+            box on;
+            axis image;
+            view(45, 45); % Consistent viewing angle
+            pause(0.01); % Adjust for rendering speed
         end
 
         % Time evolution of the SH3D equation

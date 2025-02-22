@@ -6,15 +6,15 @@ torch_seed = 0
 numpy_seed = 0
 
 # Network Parameters
-nTrain = 500 # 5250 # 7500
-nTest = 100 # 2250 #500
-batch_size = 10 # 50
+nTrain = 1200 # 5250 # 7500
+nTest = 300 # 2250 #500
+batch_size = 50 # 50
 learning_rate = 0.001 # 0.005 # 0.001
 weight_decay = 1e-4 # 1e-4
-epochs = 100 # 1000
+epochs = 50 # 1000
 iterations = epochs * (nTrain // batch_size)
-modes =  16 # 16
-width =  10 #32
+modes =  14 # 16
+width =  12 #32
 width_q =   width # width # 2 * width #
 width_h = width//2  # width//4 # width #
 n_layers = 4 # 8
@@ -27,11 +27,12 @@ T_out = 100
 # Training Setting
 normalized = True
 training = True # False  # True
-load_model = True # False #True
+load_model = False # False #True
 
 # Database
 parent_dir = './data/'
-matlab_dataset = 'SH3D_600_Nt_101_Nx_32.mat'
+#matlab_dataset = 'SH3D_600_Nt_101_Nx_32.mat'
+matlab_dataset = 'SH3D_1500_Nt_101_Nx_32.mat'
 #matlab_dataset = 'CH3D_8000_Nt_101_Nx_32_compressed.npz'
 # Plotting
 index = 62  # 24 # 62

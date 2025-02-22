@@ -6,7 +6,7 @@ fclose('all');
 disp('START MBE3D')
 
 %% Parameter Initialization
-FigDraw = 0;
+FigDraw = 1; % Set to 1 to enable visualization, 0 to disable
 
 % Spatial Parameters
 Nx = 32; 
@@ -38,8 +38,8 @@ k2z = (2 * pi / Lz * [0:Nz/2 -Nz/2+1:-1]).^2;
 [kxx2, kyy2, kzz2] = ndgrid(k2x, k2y, k2z);
 
 % Time Discretization
-dt = 0.0002;
-Nt = 500; %2500; %25000;
+dt = 0.0001;
+Nt = 200; %2500; %25000;
 num_saved_steps = 101;
 ns = Nt / (num_saved_steps - 1);
 
@@ -61,13 +61,17 @@ end
 
 %% Initial Condition
 tau = 150;
-alpha = 100.0;
+alpha = 110;
+
+if FigDraw
+    figure;
+end
 
 for data_num = 1:data_size
     %tic;
     disp("data number = " + num2str(data_num))
     
-    u = 10 * GRF3D(alpha, tau, Nx);
+    u = 0.05 * GRF3D(alpha, tau, Nx);
     all_iterations = zeros(num_saved_steps, Nx, Ny, Nz, 'single');
     
     save_idx = 1;
@@ -78,6 +82,21 @@ for data_num = 1:data_size
             save_idx = save_idx + 1;
         end
 
+        %% Visualization (Plot Section)
+        if FigDraw && mod(iter, ns) == 0
+            clf;
+            p1 = patch(isosurface(xx, yy, zz, real(u), 0));
+            set(p1, 'FaceColor', 'r', 'EdgeColor', 'none'); % Blue color for the surface
+            daspect([1 1 1]);
+            camlight;
+            lighting phong;
+            box on;
+            axis image;
+            view(45, 45); % Set consistent viewing angle
+            pause(0.01); % Adjust the pause for better rendering speed
+        end
+
+        %% Update u
         u = real(u);
         tu = fftn(u);
         fx = real(ifftn(kxx .* tu));
@@ -103,9 +122,9 @@ for data_num = 1:data_size
         iter = iter + 1;
     end
     
-    disp('Writing')
+    %disp('Writing')
     fwrite(fileID, all_iterations, 'single');
-    toc;
+    %toc;
 end
 
 %% Convert Binary Data to MAT File

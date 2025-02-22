@@ -37,7 +37,6 @@ def train_fno(model, myloss, epochs, batch_size, train_loader, test_loader,
             loss = myloss(out.flatten(start_dim=1), y.flatten(start_dim=1))
 
             loss.backward()
-
             optimizer.step()
             scheduler.step()
             train_mse += mse.item()
@@ -64,6 +63,10 @@ def train_fno(model, myloss, epochs, batch_size, train_loader, test_loader,
         train_mse_log.append(train_mse)
         train_l2_log.append(train_l2)
         test_l2_log.append(test_l2)
+
+        # Update the learning rate based on the test_l2 metric
+        #scheduler.step(test_l2) ##
+
 
         t2 = default_timer()
         #print(ep, t2 - t1, train_mse, train_l2, test_l2)

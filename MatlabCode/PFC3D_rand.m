@@ -5,12 +5,13 @@ fclose('all');
 disp('START PFC3D')
 
 %% Parameter Initialization
+FigDraw = 0; % Enable/Disable visualization (1 = On, 0 = Off)
 
 % Spatial Parameters
-Nx = 42; %32; %64;
+Nx = 32; %42; %32; %64;
 Ny = Nx;
 Nz = Nx;
-Lx = 32; %12; %3; %64;
+Lx = 3; %12; %3; %64;
 Ly = Lx;
 Lz = Lx;
 hx = Lx/Nx;
@@ -20,6 +21,7 @@ hz = Lz/Nz;
 x = linspace(-0.5*Lx+hx, 0.5*Lx, Nx);
 y = linspace(-0.5*Ly+hy, 0.5*Ly, Ny);
 z = linspace(-0.5*Lz+hz, 0.5*Lz, Nz);
+[xx, yy, zz] = ndgrid(x, y, z); % For plotting
 
 % Constant
 epsilon = 0.025;
@@ -34,8 +36,8 @@ r2 = r.^2;
 [pp2, qq2, rr2] = ndgrid(p2, q2, r2);
 
 % Time Discretization
-dt = 0.0025; %0.1;
-Nt = 2000; %200; %10000;
+dt = 0.0000000001; %0.1;
+Nt = 200; %200; %10000;
 num_saved_steps = 101;
 ns = Nt / (num_saved_steps - 1);
 
@@ -54,15 +56,26 @@ end
 
 %% Initial Condition
 
-u_mean = 0.07;
-tau = 300; %115; %3.5;
+u_mean = 0.01;
+tau = 315; %115; %3.5;
 alpha = 115; %45; %2.0;
+
+if FigDraw
+    figure;
+end
 
 for data_num = 1:data_size
     %tic;
     disp("data number = " + num2str(data_num))
     
-    u = u_mean + u_mean * GRF3D(alpha, tau, Nx);
+    %u = u_mean - u_mean * GRF3D(alpha, tau, Nx);
+
+    norm_a = GRF3D(alpha, tau, Nx);
+    norm_a = norm_a - 0.85 * std(norm_a(:));
+    u = ones(Nx, Nx, Nz);
+    u(norm_a < 0) = -1;
+
+
     all_iterations = zeros(num_saved_steps, Nx, Ny, Nz, 'single');
 
     %% Update
@@ -73,6 +86,21 @@ for data_num = 1:data_size
             save_idx = save_idx + 1;
         end
         
+        %% Visualization (Plot Section)
+        if FigDraw && mod(iter, ns) == 0
+            clf;
+            p1 = patch(isosurface(xx, yy, zz, real(u), 0));
+            set(p1, 'FaceColor', 'g', 'EdgeColor', 'none'); % Blue surface
+            daspect([1 1 1]);
+            camlight;
+            lighting phong;
+            box on;
+            axis image;
+            view(45, 45); % Consistent viewing angle
+            pause(0.01); % Adjust for rendering speed
+        end
+        
+        %% Update u
         u = real(u);
         s_hat = fftn(u/dt) - (pp2 + qq2 + rr2) .* fftn(u.^3) + 2 * (pp2 + qq2 + rr2).^2 .* fftn(u);
         v_hat = s_hat ./ (1.0/dt + (1 - epsilon) * (pp2 + qq2 + rr2) + (pp2 + qq2 + rr2).^3);

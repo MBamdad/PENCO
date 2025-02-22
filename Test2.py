@@ -1,8 +1,18 @@
-
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 print(bin(352))
+
+x = torch.randn(1, 3, 1, 4)  # Shape: (1, 3, 1, 4)
+print(x.shape)  # (1, 3, 1, 4)
+
+x_squeezed = x.squeeze()  # Removes all dimensions of size 1
+print(x_squeezed.shape)  # (3, 4)
+
+x_squeezed_dim1 = x.squeeze(1)  # Remove only dim 2
+print(x_squeezed_dim1.shape)  # (1, 3, 4)
+
 
 layer = nn.Linear(10, 5)
 print(layer)

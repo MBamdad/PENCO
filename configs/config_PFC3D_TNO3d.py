@@ -34,28 +34,29 @@ Std. deviation of testing error is 0.0021678071934729815
 
 import numpy as np
 
-# General Setting
+# General SettingnTrain = 1200 # 5250 # 7500
+
 gpu_number = 'cuda:1'  # 'cuda:1'
 torch_seed = 0
 numpy_seed = 0
 
 # Network Parameters
-nTrain = 1300
-nTest = 200
-batch_size = 20 # 100
+nTrain = 1200
+nTest = 300
+batch_size = 50 # 100
 learning_rate = 0.005
 weight_decay = 1e-4 # 1e-4
-epochs = 10
+epochs = 50
 iterations = epochs * (nTrain // batch_size)
-modes = 16 #12
+modes = 14 #12
 width = 12 # 16 # 32
 width_q = width # 32
 width_h = width//2 # 16
 n_layers = 4
 
 '''
-tau = 300; %115; %3.5;
-alpha = 115; %45; %2.0;
+tau = 315;
+alpha = 115; 
 '''
 
 # Discretization
@@ -70,11 +71,7 @@ load_model = False # True # False # True  # False
 
 # Database
 parent_dir = './data/'
-#matlab_dataset = 'PFC3D_1500_Nt_101_Nx_64.mat'
-#matlab_dataset = 'PFC3D_1500_Nt_101_Nx_64.mat'
-#matlab_dataset = 'PFC3D_1500_Nt_101_Nx_32_Lx12.mat'
-#matlab_dataset = 'PFC3D_1500_Nt_101_Nx_42_Nt200.mat'
-matlab_dataset = 'PFC3D_1500_Nt_101_Nx_42.mat'
+matlab_dataset = 'PFC3D_1500_Nt_101_Nx_32.mat'
 # Plotting
 index = 200  # 110  # 200
 domain = [-np.pi, np.pi]

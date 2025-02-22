@@ -6,7 +6,7 @@ fclose('all');
 disp('START MBE3D')
 
 %% Parameter Initialization
-FigDraw = 0;
+FigDraw = 0; % Set to 1 to enable visualization, 0 to disable
 
 % Spatial Parameters
 Nx = 32; 
@@ -38,7 +38,7 @@ k2z = (2 * pi / Lz * [0:Nz/2 -Nz/2+1:-1]).^2;
 [kxx2, kyy2, kzz2] = ndgrid(k2x, k2y, k2z);
 
 % Time Discretization
-dt = 0.002;
+dt = 0.0001;
 Nt = 200; %2500; %25000;
 num_saved_steps = 101;
 ns = Nt / (num_saved_steps - 1);
@@ -49,7 +49,7 @@ Nts = unique(Nts);
 size(Nts)
 
 % Dataset
-data_size = 2000;
+data_size = 1500;
 binary_filename = "MBE3D_" + num2str(data_size) + "_Nt_" + num2str(num_saved_steps) + "_Nx_" + num2str(Nx) + ".bin";
 mat_filename = "MBE3D_" + num2str(data_size) + "_Nt_" + num2str(num_saved_steps) + "_Nx_" + num2str(Nx) + ".mat";
 
@@ -60,14 +60,18 @@ if fileID == -1
 end
 
 %% Initial Condition
-tau = 150;
-alpha = 100.0;
+tau = 100;
+alpha = 20;
+
+if FigDraw
+    figure;
+end
 
 for data_num = 1:data_size
     %tic;
     disp("data number = " + num2str(data_num))
     
-    u = 10 * GRF3D(alpha, tau, Nx);
+    u = 5 * GRF3D(alpha, tau, Nx);
     all_iterations = zeros(num_saved_steps, Nx, Ny, Nz, 'single');
     
     save_idx = 1;
@@ -78,6 +82,21 @@ for data_num = 1:data_size
             save_idx = save_idx + 1;
         end
 
+        %% Visualization (Plot Section)
+        if FigDraw && mod(iter, ns) == 0
+            clf;
+            p1 = patch(isosurface(xx, yy, zz, real(u), 0));
+            set(p1, 'FaceColor', 'r', 'EdgeColor', 'none'); % Blue color for the surface
+            daspect([1 1 1]);
+            camlight;
+            lighting phong;
+            box on;
+            axis image;
+            view(45, 45); % Set consistent viewing angle
+            pause(0.01); % Adjust the pause for better rendering speed
+        end
+
+        %% Update u
         u = real(u);
         tu = fftn(u);
         fx = real(ifftn(kxx .* tu));
@@ -94,7 +113,7 @@ for data_num = 1:data_size
 
         if isnan(sum(u(:)))
             disp('The iteration is repeated')
-            u = 10 * GRF3D(alpha, tau, Nx);
+            u = 5 * GRF3D(alpha, tau, Nx);
             all_iterations = zeros(num_saved_steps, Nx, Ny, Nz, 'single');
             save_idx = 1;
             iter = 1;
