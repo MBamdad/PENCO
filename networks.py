@@ -57,19 +57,20 @@ class SpectralConv2d(nn.Module):
 
     def forward(self, x):
         batchsize = x.shape[0]
-        # Compute Fourier coefficients up to factor of e^(- something constant)
-        x_ft = torch.fft.rfft2(x)
+        # Compute Fourier coefficients --  1. Compute Fourier Transform
+        x_ft = torch.fft.rfft2(x) # 2D Fast Fourier Transform (FFT) --> v0 = F(v0)
 
-        # Multiply relevant Fourier modes
+        # Multiply relevant Fourier modes -- 2. Apply Spectral Convolution
         out_ft = torch.zeros(batchsize, self.out_channels, x.size(-2), x.size(-1) // 2 + 1, dtype=torch.cfloat,
                              device=x.device)
+        # v1(k1,k2)= W(k1,k2).v0(k1,k2) --> W(k1,k2) are learnable parameters that control how much each frequency mode contributes
         out_ft[:, :, :self.modes1, :self.modes2] = \
             compl_mul2d(x_ft[:, :, :self.modes1, :self.modes2], self.weights1)
         out_ft[:, :, -self.modes1:, :self.modes2] = \
             compl_mul2d(x_ft[:, :, -self.modes1:, :self.modes2], self.weights2)
 
         # Return to physical space
-        x = torch.fft.irfft2(out_ft, s=(x.size(-2), x.size(-1)))
+        x = torch.fft.irfft2(out_ft, s=(x.size(-2), x.size(-1))) # Apply Inverse Fourier Transform (iFFT) --> v1(x,y) = F^(-1)[v1(k1,k2)]
         return x
 
 
@@ -193,11 +194,12 @@ class FNO2d(nn.Module):
         self.padding = 8  # pad the domain if input is non-periodic
         self.n_layers = n_layers
 
-        self.p = nn.Linear(T_in + 2, self.width)  # input channel is 12: the solution of the previous 10 timesteps + 2 locations (u(t-10, x, y), ..., u(t-1, x, y),  x, y)
+        self.p = nn.Linear(T_in + 2, self.width)  # We start with an input x == u(x,y) of shape (batch,x,y,c), We lift it to a higher-dimensional space using a linear layer
+        # v0(x,y) = p(x=u)
         self.convs = nn.ModuleList(
-            [SpectralConv2d(self.width, self.width, self.modes1, self.modes2) for _ in range(n_layers)])
+            [SpectralConv2d(self.width, self.width, self.modes1, self.modes2) for _ in range(n_layers)]) # 2D Fast Fourier Transform (FFT) --> v0 = F(v0)
         self.mlps = nn.ModuleList([MLP2d(self.width, self.width, self.width) for _ in range(n_layers)])
-        self.ws = nn.ModuleList([nn.Conv2d(self.width, self.width, 1) for _ in range(n_layers)])
+        self.ws = nn.ModuleList([nn.Conv2d(self.width, self.width, 1) for _ in range(n_layers)]) # Pointwise convolution layers
         self.norm = nn.InstanceNorm2d(self.width)
         self.q = MLP2d(self.width, 1, self.width_q)  # output channel is 1: u(x, y)
 
@@ -211,20 +213,48 @@ class FNO2d(nn.Module):
         for i in range(self.n_layers):
             x1 = self.convs[i](x)
             x1 = self.mlps[i](x1)
+            '''
+            x1 = self.mlps[i](x1): Local Mixing Using MLP: Since the Fourier convolution captures global dependencies,
+             we still need local interactions --> v_i+1 = sigma(W.vi  +  b), 
+             which W and 𝑏 are learnable parameters, and σ is the activation function.
+            '''
             x2 = self.ws[i](x)
-            x = x1 + x2
+            '''
+             x2 = self.ws[i](x): applies a pointwise convolution (1×1 convolution) to the input tensor x.
+                self.ws is a list (nn.ModuleList) of 1×1 convolutional layers.
+                Each self.ws[i] is a 2D convolution layer (nn.Conv2d) with a kernel size of 1x1.
+                The purpose of these layers is to perform a linear transformation of the feature maps 
+                without mixing spatial locations.
+
+            '''
+            x = x1 + x2 #  Merge Global and Local Representations
             x = F.gelu(x) if i < self.n_layers - 1 else x
 
         # x = x[..., :-self.padding, :-self.padding] # pad the domain if input is non-periodic
         x = self.q(x)
+        '''
+         Output Projection back to the desired shape using another MLP
+        v_out = Q.v_final(x,y)
+        Q is a learnable projection.
+
+        '''
         x = x.permute(0, 2, 3, 1)
+        #The final shape of x is (batch,x,y,1), which represents the predicted function value at each spatial location.
         return x
 
 
 class TNO2d(FNO2d):
     def __init__(self, modes1, modes2, width, width_q, width_h, T_in, T_out, n_layers, n_layers_q=2, n_layers_h=4):
         super(TNO2d, self).__init__(modes1, modes2, width, width_q, T_in, T_out, n_layers)
-
+        '''
+         TNO2d extends FNO2d. It introduces temporal modeling by adding two MLP layers:
+        self.q → projects the Fourier features to output over time.
+        self.h → handles temporal dependencies between consecutive time steps.
+        New parameters added:
+        width_h → controls temporal memory features.
+        n_layers_q → depth of self.q (output MLP).
+        n_layers_h → depth of self.h (temporal evolution MLP).
+        '''
         self.width_h = width_h
         #self.q = MLP2d(self.width, 1, self.width, T_out) # for AC
         #self.q2 = MLP2d(1, 1, self.width // 4, T_out - 1)
@@ -235,8 +265,8 @@ class TNO2d(FNO2d):
 
     def forward(self, x):
         grid = get_grid_2d(x.shape, x.device)
-        x = torch.cat((x, grid), dim=-1)
-        x = self.p(x)
+        x = torch.cat((x, grid), dim=-1) # a(x) or= x : Input function (e.g., initial condition for a PDE)
+        x = self.p(x) # 	Lifts input to a high-dimensional space
         x = x.permute(0, 3, 1, 2)
         # x = F.pad(x, [0, self.padding, 0, self.padding])
 
@@ -245,17 +275,29 @@ class TNO2d(FNO2d):
             x1 = self.mlps[i](x1)
             x2 = self.ws[i](x)
             x = x1 + x2
-            x = F.gelu(x) if i < self.n_layers - 1 else x
+            x = F.gelu(x) if i < self.n_layers - 1 else x # x′=GELU(FourierConv(x)+MLP(x)+PointwiseConv(x)
 
         # x = x[..., :-self.padding, :-self.padding]
+        '''
+         Temporal Evolution Loop
+        Initial time step prediction:
+        Uses self.q(x) to generate the first time step.
+        Stores result in X[..., 0]
+        '''
         X = torch.zeros(*grid.shape[:-1], self.T_out, device=x.device)
         xt = self.q(x)
         X[..., 0] = xt.permute(0, 2, 3, 1).squeeze(-1)
+
         for t in range(1, self.T_out):
-            x1 = self.q(x, t)
-            x2 = self.h(xt, t - 1)
-            xt = x1 + x2
+            x1 = self.q(x, t) # Predicts the next step using Fourier features.  # Q_n∘(W_L+ K_L )∘...∘P(a(x)), Projects final Fourier features to outpu
+            x2 = self.h(xt, t - 1) # Uses previous output (xt) to refine the next state. # H_n∘G_θ (x,t_(n-1) )(a(x)), Models dependency on past states
+            xt = x1 + x2 #  Solution at time t_n : x_t = G_θ (x,t_n )(a(x))
             X[..., t] = xt.permute(0, 2, 3, 1).squeeze(-1)
+            '''
+             Uses previous output (xt) to refine the next state.
+            Combines both predictions --> x_t=MLP_q(x)+MLP_h[(x t−1)]
+            Stores result in X[..., t]
+            '''
         return X
 
 
@@ -297,12 +339,12 @@ class FNO3d(nn.Module):
         self.q = MLP3d(self.width, 1, self.width_q)  # output channel is 1: u(x, y)
 
     def forward(self, x):
-        x = x.unsqueeze(3).repeat([1, 1, 1, self.T_out, 1])
+        #x = x.unsqueeze(3).repeat([1, 1, 1, self.T_out, 1])
         grid = get_grid_3d(x.shape, x.device)
         x = torch.cat((x, grid), dim=-1)
         x = self.p(x)
         x = x.permute(0, 4, 1, 2, 3)
-        x = F.pad(x, [0, self.padding])  # pad the domain if input is non-periodic
+        #x = F.pad(x, [0, self.padding])  # pad the domain if input is non-periodic
 
         for i in range(self.n_layers):
             x1 = self.convs[i](x)
@@ -311,10 +353,10 @@ class FNO3d(nn.Module):
             x = x1 + x2
             x = F.gelu(x) if i < self.n_layers - 1 else x
 
-        x = x[..., :-self.padding]
+        #x = x[..., :-self.padding]
         x = self.q(x)
-
-        x = x.permute(0, 2, 3, 4, 1)[..., 0]  # pad the domain if input is non-periodic
+        #x = x.permute(0, 2, 3, 4, 1)[..., 0]  # pad the domain if input is non-periodic
+        x = x.permute(0, 2, 3, 4, 1)
         return x
 
 

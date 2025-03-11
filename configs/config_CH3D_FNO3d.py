@@ -1,14 +1,14 @@
 import numpy as np
 
 # General Setting
-gpu_number = 'cuda:1'  # 'cuda:1'
+gpu_number = 'cuda:3'  # 'cuda:1'
 torch_seed = 0
 numpy_seed = 0
 
 # Network Parameters
 nTrain = 600 #900 # 500 # 6000 # 8000# 1200 #1200 # 7500
 nTest =  200 # 300 # 100 # 2000 # 4000 #300 # 300 #500
-batch_size = 20 # 50 # 3 # 20 # 50 # 5 # 50
+batch_size = 2 # 20 # 50 # 3 # 20 # 50 # 5 # 50
 learning_rate = 0.001 # 0.0001 # 0.001 # 0.005 # 0.001
 weight_decay = 1e-4 # 1e-3 # 1e-4
 epochs = 100 # 500 # 1000 # 25 # 100 # 1000
@@ -21,7 +21,7 @@ n_layers = 4 # 4 # 5 # 5 # 8
 
 # Discretization
 
-s = 64 # 64 #32 # 64
+s = 64 # 32 # 64 #32 # 64
 T_in = 1
 T_out = 20 # 100
 
@@ -32,9 +32,9 @@ load_model = False # True # False # False #True
 
 # Database
 parent_dir = './data/'
+
 #matlab_dataset = 'CH3D_1500_Nt_101_Nx_32.mat'
 matlab_dataset = 'CH3D_800_Nt_101_Nx_64.mat'
-
 
 # Plotting
 index = 62  # 24 # 62

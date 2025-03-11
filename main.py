@@ -23,13 +23,12 @@ problem = 'SH3D'
 #problem = 'PFC3D'
 #problem = 'MBE2D'
 #problem = 'MBE3D'
-
-#network_name = 'TNO2d'
-# network_name = 'FNO3d'
-# network_name = 'FNO2d'
-
 # problem = 'CH2D'
 #problem = 'CH3D'
+
+#network_name = 'TNO2d'
+# network_name = 'FNO2d'
+#network_name = 'FNO3d'
 network_name = 'TNO3d'
 
 print(f"problem = {problem}")
@@ -41,7 +40,7 @@ network = getattr(importlib.import_module('networks'), network_name) # from netw
 torch.manual_seed(cf.torch_seed)
 np.random.seed(cf.numpy_seed)
 #device = torch.device(cf.gpu_number if torch.cuda.is_available() else 'cpu')
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
 print("Device: ", device)
 
 # width_q = 32
@@ -115,7 +114,7 @@ myloss = LpLoss(size_average=False)
 
 # Train the model
 if cf.training:
-    if network_name == 'FNO2d':
+    if network_name == 'FNO2d'  or network_name == 'FNO3d':
         model, train_l2_log, test_l2_log = (
             train_fno_time(model, myloss, cf.epochs, cf.batch_size, train_loader, test_loader,
                            optimizer, scheduler, cf.normalized, normalizers, device))
@@ -134,9 +133,11 @@ if cf.training:
 
 # losses = [train_mse_log, train_l2_log, test_l2_log]
 # labels = ['Train MSE', 'Train L2', 'Test L2']
-losses = [train_l2_log, test_l2_log]
-labels = ['Train L2', 'Test L2']
-plot_loss_trend(losses, labels, problem)
+
+end_time = time.time()
+Final_time = round(end_time - start_time, 2)
+# Print the total execution time
+print(f"Total Execution Time: {Final_time} seconds")
 
 evaluator = ModelEvaluator(model, test_dataset, cf.s, cf.T_in, cf.T_out, device, cf.normalized, normalizers,
                            time_history=(network_name == 'FNO2d'))
@@ -145,10 +146,13 @@ results = evaluator.evaluate(loss_fn=myloss)
 inp = results['input']
 pred = results['prediction']
 exact = results['exact']
+test_l2_avg = results["average"]
 # Record the end time
-end_time = time.time()
-# Print the total execution time
-print(f"Total Execution Time: {end_time - start_time:.2f} seconds")
+
+
+losses = [train_l2_log, test_l2_log]
+labels = ['Train L2', 'Test L2']
+plot_loss_trend(losses, labels, problem, network_name, Final_time, test_l2_avg)
 ################################################################
 # post-processing
 ################################################################
@@ -179,7 +183,8 @@ field_names = ['Exact Value', 'Predicted Value', 'Error']
 # plot_range = [[-0.75, 0.75], [-0.75, 0.75], [-0.5, 0.5]]
 plot_range = [[-1.2, 1.2], [-1.2, 1.2], [-0.6, 0.6]]
 # plot_range = [[-1.0, 1.0], [-1.0, 1.0], [0.0, 1.0]]
-plot_field_trajectory(cf.domain, fields, field_names, cf.time_steps, plot_range, problem, plot_show=True)
+plot_field_trajectory(cf.domain, fields, field_names, cf.time_steps, plot_range, problem, network_name, plot_show=True,
+                          interpolation=True)
 
 # make_video(u_pred, cf.domain, "predicted", plot_range, problem)
 # make_video(u_exact, cf.domain, "exact", plot_range, problem)

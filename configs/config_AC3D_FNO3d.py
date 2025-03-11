@@ -26,7 +26,7 @@ T_out = 20 # 100
 
 # Training Setting
 normalized = True
-training = True  # False
+training = True # False  # False
 load_model = False # True  # True
 
 # Database

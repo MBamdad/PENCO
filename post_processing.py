@@ -29,9 +29,8 @@ def plot_loss_trend(losses, labels, problem):
 
     '''
 
-
-def plot_loss_trend(losses, labels, problem):
-    folder = os.path.join(problem, "plots")
+def plot_loss_trend(losses, labels, problem, network_name, Final_time, test_l2_avg):
+    folder = os.path.join(problem, f"plots_{network_name}")
     os.makedirs(folder, exist_ok=True)
 
     fig_font = "DejaVu Serif"
@@ -41,6 +40,15 @@ def plot_loss_trend(losses, labels, problem):
     for loss, label in zip(losses, labels):
         plt.semilogy(loss, label=label)
     plt.legend()
+
+    # Add annotation for Final_time and average test loss
+    annotation_text = f"Final Time: {Final_time}\nAvg. Test Error: {test_l2_avg:.4f}"
+    plt.annotate(annotation_text, xy=(0.6, 0.8), xycoords="axes fraction",
+                 fontsize=10, bbox=dict(boxstyle="round,pad=0.3", edgecolor="black", facecolor="white"))
+
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.title(f"Loss Trend problem_{problem} model_{network_name}")
 
     plot_name = os.path.join(folder, "LossTrend.png")
     plt.savefig(plot_name, dpi=600, bbox_inches='tight')
@@ -52,11 +60,12 @@ def plot_loss_trend(losses, labels, problem):
         print(f"Error showing plot. The loss trend is saved at {plot_name}.")
 
 
-def plot_field_trajectory(domain, fields, field_names, time_steps, plot_range, problem, plot_show=True,
+def plot_field_trajectory(domain, fields, field_names, time_steps, plot_range, problem, network_name, plot_show=True,
                           interpolation=True):
     colors = ["black", "yellow"] if fields[0].ndim == 3 else ["white", "blue"]
     custom_cmap = LinearSegmentedColormap.from_list("two_phase", colors, N=100)
-    folder = problem + "/plots/"
+    #folder = problem + "/plots/"
+    folder = os.path.join(problem, f"plots_{network_name}") + "/"
     os.makedirs(folder, exist_ok=True)
     interpolation_opt = 'lanczos' if interpolation else 'nearest'
 
