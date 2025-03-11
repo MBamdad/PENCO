@@ -329,12 +329,12 @@
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Python.AC3D_FNO3d" />
-      <item itemvalue="Python.AC3D_TNO3d" />
-      <item itemvalue="Python.CH3D_FNO3d" />
       <item itemvalue="Python.CH3D_TNO3d" />
-      <item itemvalue="Python.MBE3D_TNO3d" />
+      <item itemvalue="Python.AC3D_TNO3d" />
       <item itemvalue="Python.SH3D_FNO3d" />
+      <item itemvalue="Python.CH3D_FNO3d" />
+      <item itemvalue="Python.MBE3D_TNO3d" />
+      <item itemvalue="Python.AC3D_FNO3d" />
     </list>
   </component>
   <component name="SharedIndexes">
