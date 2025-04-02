@@ -8,7 +8,7 @@ numpy_seed = 0
 # Network Parameters
 nTrain = 1000 # 900 # 1000
 nTest = 300 # 100 # 100
-batch_size = 50 # 20 #5 # 25
+batch_size = 10 # 50 # 20 #5 # 25
 learning_rate = 0.001
 weight_decay = 1e-4
 epochs = 50 # 100 # 900  # 100
@@ -26,8 +26,8 @@ T_out = 20 # 100
 
 # Training Setting
 normalized = True
-training = True  # False
-load_model = False # True  # True
+training = False # True  # False
+load_model = True  #  False # True  # True
 
 # Database
 parent_dir = './data/'

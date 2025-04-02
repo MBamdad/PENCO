@@ -58,6 +58,9 @@ class SpectralConv2d(nn.Module):
     def forward(self, x):
         batchsize = x.shape[0]
         # Compute Fourier coefficients --  1. Compute Fourier Transform
+        # Now, instead of working with raw pixel/grid values, we work with frequency components\
+        # Suppose the input x has shape (batch, in_channels, H, W)
+        # x_ft has shape: batch×in_channels×H×(W/2+1)
         x_ft = torch.fft.rfft2(x) # 2D Fast Fourier Transform (FFT) --> v0 = F(v0)
 
         # Multiply relevant Fourier modes -- 2. Apply Spectral Convolution
@@ -163,9 +166,13 @@ class MLP3d(MLP2d):
         self.layers = nn.ModuleList()
         for _ in range(T):
             self.layers.append(nn.Conv3d(in_channels, mid_channels, 1))
+            # After (3x3x3 kernel)
+            #self.layers.append(nn.Conv3d(in_channels, mid_channels, 3, padding=1))  ## Changed from 1*1*1 to 3*3*3
             for _ in range(self.num_layers - 2):
                 self.layers.append(nn.Conv3d(mid_channels, mid_channels, 1))
+                #self.layers.append(nn.Conv3d(mid_channels, mid_channels, 3, padding=1))  ## Changed from 1 to 3
             self.layers.append(nn.Conv3d(mid_channels, out_channels, 1))
+            #self.layers.append(nn.Conv3d(mid_channels, out_channels, 3, padding=1))  ## Changed from 1 to 3
 
 
 class FNO2d(nn.Module):
@@ -216,7 +223,7 @@ class FNO2d(nn.Module):
             '''
             x1 = self.mlps[i](x1): Local Mixing Using MLP: Since the Fourier convolution captures global dependencies,
              we still need local interactions --> v_i+1 = sigma(W.vi  +  b), 
-             which W and 𝑏 are learnable parameters, and σ is the activation function.
+             which W and b are learnable parameters, and σ is the activation function.
             '''
             x2 = self.ws[i](x)
             '''
@@ -335,17 +342,20 @@ class FNO3d(nn.Module):
             [SpectralConv3d(self.width, self.width, self.modes1, self.modes2, self.modes3) for _ in range(n_layers)])
         self.mlps = nn.ModuleList([MLP3d(self.width, self.width, self.width) for _ in range(n_layers)])
         self.ws = nn.ModuleList([nn.Conv3d(self.width, self.width, 1) for _ in range(n_layers)])
+        #self.ws = nn.ModuleList([nn.Conv3d(self.width, self.width, 3, padding=1) for _ in range(n_layers)])  ## kernel changed
         #self.q = MLP3d(self.width, 1, self.width)  # output channel is 1: u(x, y)
         self.q = MLP3d(self.width, 1, self.width_q)  # output channel is 1: u(x, y)
 
     def forward(self, x):
         #x = x.unsqueeze(3).repeat([1, 1, 1, self.T_out, 1])
         grid = get_grid_3d(x.shape, x.device)
+        #print(' x shape:', x.shape)
         x = torch.cat((x, grid), dim=-1)
+        #print(' x shape after cat:', x.shape)
         x = self.p(x)
         x = x.permute(0, 4, 1, 2, 3)
         #x = F.pad(x, [0, self.padding])  # pad the domain if input is non-periodic
-
+        #print(' x shape after permute:', x.shape)
         for i in range(self.n_layers):
             x1 = self.convs[i](x)
             x1 = self.mlps[i](x1)
@@ -357,6 +367,7 @@ class FNO3d(nn.Module):
         x = self.q(x)
         #x = x.permute(0, 2, 3, 4, 1)[..., 0]  # pad the domain if input is non-periodic
         x = x.permute(0, 2, 3, 4, 1)
+        #print('FNO3d return x shape:', x.shape)
         return x
 
 
@@ -380,6 +391,8 @@ class TNO3d(FNO3d):
 
     def forward(self, x):
         grid = get_grid_3d(x.shape, x.device)
+        #print('x shape: ',x.shape)
+        #print('grid shape: ', grid.shape)
         x = torch.cat((x, grid), dim=-1)
         x = self.p(x)
         x = x.permute(0, 4, 1, 2, 3)
@@ -401,4 +414,94 @@ class TNO3d(FNO3d):
             x2 = self.h(xt, t - 1)
             xt = x1 + x2
             X[..., t] = xt.permute(0, 2, 3, 4, 1).squeeze(-1)
+
+        #print('shape X for model TNO: ', X.shape)
         return X
+
+
+def compute_spatial_derivatives(field, coordinates):
+    """
+    Computes first and second spatial derivatives of a field with respect to coordinates
+
+    Args:
+        field: Tensor of shape [batch, x, y, z]
+        coordinates: Tensor of shape [batch, x, y, z, 3] (must require grad)
+
+    Returns:
+        laplacian: Tensor of shape [batch, x, y, z] containing Δϕ
+    """
+    # Ensure we can compute gradients
+    field = field.clone().requires_grad_(True)
+    coordinates = coordinates.clone().requires_grad_(True)
+
+    # Compute first derivatives
+    grad_outputs = torch.ones_like(field)
+    grad_x, grad_y, grad_z = torch.autograd.grad(
+        outputs=field,
+        inputs=coordinates,
+        grad_outputs=grad_outputs,
+        create_graph=True,
+        retain_graph=True,
+        allow_unused=False
+    )[0].unbind(dim=-1)
+
+    # Compute second derivatives
+    laplacian = 0.0
+    for grad in [grad_x, grad_y, grad_z]:
+        grad_outputs = torch.ones_like(grad)
+        d2phi = torch.autograd.grad(
+            outputs=grad,
+            inputs=coordinates,
+            grad_outputs=grad_outputs,
+            create_graph=True,
+            retain_graph=True,
+            allow_unused=False
+        )[0].unbind(dim=-1)[0]  # Take derivative along same axis
+        laplacian += d2phi
+
+    return laplacian
+
+
+def compute_allen_cahn_loss(predictions, coordinates, epsilon=0.05, delta_t=0.01):
+    """
+    Robust physics loss calculation for Allen-Cahn equation
+
+    Args:
+        predictions: Model outputs [batch, x, y, z, time]
+        coordinates: Spatial coordinates [batch, x, y, z, 3]
+        epsilon: Interface width parameter
+        delta_t: Time step size
+
+    Returns:
+        pde_loss: PDE residual loss
+        bc_loss: Boundary condition loss
+    """
+    batch_size = predictions.shape[0]
+    pde_loss = 0.0
+    bc_loss = 0.0
+
+    # Compute for each time step
+    for t in range(predictions.shape[-1]):
+        phi_t = predictions[..., t]
+
+        # Compute Laplacian
+        laplacian = compute_spatial_derivatives(phi_t, coordinates)
+
+        # Compute time derivative (finite difference)
+        if t == 0:
+            dt = (predictions[..., t + 1] - predictions[..., t]) / delta_t
+        elif t == predictions.shape[-1] - 1:
+            dt = (predictions[..., t] - predictions[..., t - 1]) / delta_t
+        else:
+            dt = (predictions[..., t + 1] - predictions[..., t - 1]) / (2 * delta_t)
+
+        # Allen-Cahn residual
+        residual = dt - (laplacian - (1 / epsilon ** 2) * (phi_t ** 3 - phi_t))
+        pde_loss += torch.mean(residual ** 2)
+
+        # Periodic boundary conditions
+        bc_loss += torch.mean((phi_t[..., 0, :, :] - phi_t[..., -1, :, :]) ** 2)
+        bc_loss += torch.mean((phi_t[..., :, 0, :] - phi_t[..., :, -1, :]) ** 2)
+        bc_loss += torch.mean((phi_t[..., :, :, 0] - phi_t[..., :, :, -1]) ** 2)
+
+    return pde_loss / predictions.shape[-1], bc_loss / (3 * predictions.shape[-1])

@@ -4,21 +4,28 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="69f06a2e-e075-4f1f-8925-28211e19f97d" name="Changes" comment="update to 3D">
-      <change afterPath="$PROJECT_DIR$/configs/config_AC3D_FNO3d.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/configs/config_CH3D_FNO3d.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/configs/config_MBE3D_FNO3d.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/configs/config_PFC3D_FNO3d.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/configs/config_SH3D_FNO3d.py" afterDir="false" />
+    <list default="true" id="69f06a2e-e075-4f1f-8925-28211e19f97d" name="Changes" comment="TNO3d vs FNO3d">
+      <change afterPath="$PROJECT_DIR$/PhaseField_PINNs/pythonProject/.idea/.gitignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/PhaseField_PINNs/pythonProject/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/PhaseField_PINNs/pythonProject/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/PhaseField_PINNs/pythonProject/.idea/misc.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/PhaseField_PINNs/pythonProject/.idea/modules.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/PhaseField_PINNs/pythonProject/.idea/pythonProject.iml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/PhaseField_PINNs/pythonProject/.idea/vcs.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/PhaseField_PINNs/pythonProject/Trainer.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/PhaseField_PINNs/pythonProject/data_set.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/PhaseField_PINNs/pythonProject/initial3d.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/PhaseField_PINNs/pythonProject/losses.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/PhaseField_PINNs/pythonProject/main.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/PhaseField_PINNs/pythonProject/model.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/PhaseField_PINNs/pythonProject/post_processing.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/configs/config_AC3D_TNO3d.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config_AC3D_TNO3d.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_CH3D_TNO3d.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config_CH3D_TNO3d.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_MBE3D_TNO3d.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config_MBE3D_TNO3d.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_PFC3D_TNO3d.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config_PFC3D_TNO3d.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_SH3D_FNO3d.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config_SH3D_FNO3d.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/configs/config_SH3D_TNO3d.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config_SH3D_TNO3d.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/networks.py" beforeDir="false" afterPath="$PROJECT_DIR$/networks.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/post_processing.py" beforeDir="false" afterPath="$PROJECT_DIR$/post_processing.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/training.py" beforeDir="false" afterPath="$PROJECT_DIR$/training.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -62,7 +69,7 @@
 }</component>
   <component name="GithubPullRequestsUISettings">{
   &quot;selectedUrlAndAccountId&quot;: {
-    &quot;url&quot;: &quot;https://github.com/eshaghi-ms/PhaseFieldNet&quot;,
+    &quot;url&quot;: &quot;https://github.com/MBamdad/PhaseField_SANO3&quot;,
     &quot;accountId&quot;: &quot;819f0417-ba46-4324-b18a-a12d153ca697&quot;
   }
 }</component>
@@ -87,11 +94,11 @@
     &quot;Python.AC2D_Net2D_3.executor&quot;: &quot;Debug&quot;,
     &quot;Python.AC3D.executor&quot;: &quot;Run&quot;,
     &quot;Python.AC3D_FNO3d.executor&quot;: &quot;Run&quot;,
-    &quot;Python.AC3D_TNO3d.executor&quot;: &quot;Run&quot;,
+    &quot;Python.AC3D_TNO3d.executor&quot;: &quot;Debug&quot;,
     &quot;Python.CH2D.executor&quot;: &quot;Run&quot;,
     &quot;Python.CH3D_2.executor&quot;: &quot;Run&quot;,
     &quot;Python.CH3D_FNO3d.executor&quot;: &quot;Run&quot;,
-    &quot;Python.CH3D_TNO3d.executor&quot;: &quot;Run&quot;,
+    &quot;Python.CH3D_TNO3d.executor&quot;: &quot;Debug&quot;,
     &quot;Python.MBE2D.executor&quot;: &quot;Run&quot;,
     &quot;Python.MBE3D.executor&quot;: &quot;Run&quot;,
     &quot;Python.MBE3D_New.executor&quot;: &quot;Run&quot;,
@@ -131,7 +138,7 @@
     &quot;Python.test1.executor&quot;: &quot;Run&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/scratch/noqu8762/PhaseField_SANO3/data&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/scratch/noqu8762/PhaseField_SANO3D&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
@@ -159,31 +166,7 @@
       <recent name="$PROJECT_DIR$" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.CH3D_FNO3d">
-    <configuration name="AC3D_FNO3d" type="PythonConfigurationType" factoryName="Python">
-      <module name="PhaseFieldNet" />
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="SDK_NAME" value="torch_env" />
-      <option name="WORKING_DIRECTORY" value="" />
-      <option name="IS_MODULE_SDK" value="false" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/main.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
+  <component name="RunManager" selected="Python.AC3D_TNO3d">
     <configuration name="AC3D_TNO3d" type="PythonConfigurationType" factoryName="Python">
       <module name="PhaseFieldNet" />
       <option name="ENV_FILES" value="" />
@@ -208,7 +191,7 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="CH3D_FNO3d" type="PythonConfigurationType" factoryName="Python">
+    <configuration name="AC3D_TNO3d" type="PythonConfigurationType" factoryName="Python">
       <module name="PhaseFieldNet" />
       <option name="ENV_FILES" value="" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -328,13 +311,36 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
+    <configuration name="SH3D_TNO3d" type="PythonConfigurationType" factoryName="Python">
+      <module name="PhaseFieldNet" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="SDK_NAME" value="torch_env (2)" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/main.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
     <list>
-      <item itemvalue="Python.CH3D_TNO3d" />
       <item itemvalue="Python.AC3D_TNO3d" />
-      <item itemvalue="Python.SH3D_FNO3d" />
-      <item itemvalue="Python.CH3D_FNO3d" />
+      <item itemvalue="Python.CH3D_TNO3d" />
       <item itemvalue="Python.MBE3D_TNO3d" />
-      <item itemvalue="Python.AC3D_FNO3d" />
+      <item itemvalue="Python.SH3D_FNO3d" />
+      <item itemvalue="Python.SH3D_TNO3d" />
     </list>
   </component>
   <component name="SharedIndexes">
@@ -428,6 +434,15 @@
       <workItem from="1740212626723" duration="1263000" />
       <workItem from="1740213932190" duration="644000" />
       <workItem from="1741475492994" duration="40894000" />
+      <workItem from="1741690305204" duration="339000" />
+      <workItem from="1741705983516" duration="604000" />
+      <workItem from="1741713165753" duration="1198000" />
+      <workItem from="1741861318912" duration="2286000" />
+      <workItem from="1742201562752" duration="618000" />
+      <workItem from="1742209067924" duration="383000" />
+      <workItem from="1742226300133" duration="2432000" />
+      <workItem from="1743071528350" duration="9513000" />
+      <workItem from="1743490058046" duration="9000" />
     </task>
     <task id="LOCAL-00001" summary="Initial Commit">
       <option name="closed" value="true" />
@@ -573,7 +588,23 @@
       <option name="project" value="LOCAL" />
       <updated>1739275433418</updated>
     </task>
-    <option name="localTasksCounter" value="19" />
+    <task id="LOCAL-00019" summary="TNO3d vs FNO3d">
+      <option name="closed" value="true" />
+      <created>1741690373369</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1741690373369</updated>
+    </task>
+    <task id="LOCAL-00020" summary="TNO3d vs FNO3d">
+      <option name="closed" value="true" />
+      <created>1741690420059</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1741690420059</updated>
+    </task>
+    <option name="localTasksCounter" value="21" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -632,7 +663,8 @@
     <MESSAGE value="added PFC2D" />
     <MESSAGE value="Turn Nx to 64" />
     <MESSAGE value="update to 3D" />
-    <option name="LAST_COMMIT_MESSAGE" value="update to 3D" />
+    <MESSAGE value="TNO3d vs FNO3d" />
+    <option name="LAST_COMMIT_MESSAGE" value="TNO3d vs FNO3d" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -688,11 +720,6 @@
           <option name="timeStamp" value="129" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/utilities.py</url>
-          <line>110</line>
-          <option name="timeStamp" value="132" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/Test.py</url>
           <line>25</line>
           <option name="timeStamp" value="133" />
@@ -713,19 +740,14 @@
           <option name="timeStamp" value="144" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/training.py</url>
-          <line>30</line>
-          <option name="timeStamp" value="147" />
+          <url>file://$PROJECT_DIR$/networks.py</url>
+          <line>418</line>
+          <option name="timeStamp" value="165" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/training.py</url>
-          <line>112</line>
-          <option name="timeStamp" value="150" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/training.py</url>
-          <line>131</line>
-          <option name="timeStamp" value="152" />
+          <url>file://$PROJECT_DIR$/networks.py</url>
+          <line>395</line>
+          <option name="timeStamp" value="168" />
         </line-breakpoint>
       </breakpoints>
       <default-breakpoints>
@@ -738,9 +760,11 @@
     </breakpoint-manager>
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/PhaseFieldNet$config_AC2D_FNO3d.coverage" NAME="config_AC2D_FNO3d Coverage Results" MODIFIED="1733233385695" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/configs" />
     <SUITE FILE_PATH="coverage/PhaseField1$Test3.coverage" NAME="Test3 Coverage Results" MODIFIED="1739273938386" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
+    <SUITE FILE_PATH="coverage/PhaseFieldNet$config_AC2D_FNO3d.coverage" NAME="config_AC2D_FNO3d Coverage Results" MODIFIED="1733233385695" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/configs" />
+    <SUITE FILE_PATH="coverage/PhaseField_SANO3D$main.coverage" NAME="main Coverage Results" MODIFIED="1743065376798" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$AC2D_Net2D_2.coverage" NAME="AC2D_Net2D_2 Coverage Results" MODIFIED="1732904114403" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhaseField_SANO3D$test2.coverage" NAME="test2 Coverage Results" MODIFIED="1742889074336" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/PhaseField_SANO3$MBE3D_New.coverage" NAME="MBE3D_New Coverage Results" MODIFIED="1741561715014" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
     <SUITE FILE_PATH="coverage/PhaseField1$backend_interagg.coverage" NAME="backend_interagg Coverage Results" MODIFIED="1737630366471" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$APPLICATION_HOME_DIR$/plugins/python/helpers/pycharm_matplotlib_backend" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$RunScript3.coverage" NAME="RunScript3 Coverage Results" MODIFIED="1736368081257" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
@@ -753,9 +777,10 @@
     <SUITE FILE_PATH="coverage/PhaseField1$PFC3D.coverage" NAME="PFC3D Coverage Results" MODIFIED="1740083613128" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
     <SUITE FILE_PATH="coverage/PhaseField_SANO3$SH3D_FNO3d.coverage" NAME="SH3D_FNO3d Coverage Results" MODIFIED="1741603428589" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
     <SUITE FILE_PATH="coverage/PhaseField1$main.coverage" NAME="main Coverage Results" MODIFIED="1738663765959" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/PhaseFieldNet$post_processing.coverage" NAME="post_processing Coverage Results" MODIFIED="1733557098801" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$config_CH2D_TNO2d.coverage" NAME="config_CH2D_TNO2d Coverage Results" MODIFIED="1734086207850" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/configs" />
+    <SUITE FILE_PATH="coverage/PhaseFieldNet$post_processing.coverage" NAME="post_processing Coverage Results" MODIFIED="1733557098801" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$RunScript2.coverage" NAME="RunScript2 Coverage Results" MODIFIED="1736369209710" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
+    <SUITE FILE_PATH="coverage/PhaseField_SANO3D$SH3D_FNO3d.coverage" NAME="SH3D_FNO3d Coverage Results" MODIFIED="1742215946758" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$AC2D_Net2D_3.coverage" NAME="AC2D_Net2D_3 Coverage Results" MODIFIED="1732974697103" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$AC2D.coverage" NAME="AC2D Coverage Results" MODIFIED="1733088640665" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Archive_Code" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$AC2D_Net2D.coverage" NAME="AC2D_Net2D Coverage Results" MODIFIED="1732567473230" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
@@ -764,6 +789,7 @@
     <SUITE FILE_PATH="coverage/PhaseField1$config_AC3D_TNO3d.coverage" NAME="config_AC3D_TNO3d Coverage Results" MODIFIED="1737644605063" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/configs" />
     <SUITE FILE_PATH="coverage/PhaseField1$MBE3D.coverage" NAME="MBE3D Coverage Results" MODIFIED="1739283566145" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
     <SUITE FILE_PATH="coverage/PhaseField_SANO3$CH3D_TNO3d.coverage" NAME="CH3D_TNO3d Coverage Results" MODIFIED="1741605347375" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
+    <SUITE FILE_PATH="coverage/PhaseField_SANO3D$CH3D_TNO3d.coverage" NAME="CH3D_TNO3d Coverage Results" MODIFIED="1743071672425" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$main.coverage" NAME="main Coverage Results" MODIFIED="1736268192289" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/PhaseField_SANO3$PFC3D_TNO3d.coverage" NAME="PFC3D_TNO3d Coverage Results" MODIFIED="1741564210973" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$config_CH2DNL_TNO2d.coverage" NAME="config_CH2DNL_TNO2d Coverage Results" MODIFIED="1735052490996" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/configs" />
@@ -771,6 +797,8 @@
     <SUITE FILE_PATH="coverage/PhaseField1$CH3D_TNO3d.coverage" NAME="CH3D_TNO3d Coverage Results" MODIFIED="1739914172084" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
     <SUITE FILE_PATH="coverage/PhaseField1$Test_Run.coverage" NAME="Test_Run Coverage Results" MODIFIED="1738945320139" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
     <SUITE FILE_PATH="coverage/PhaseField_SANO3$AC3D_TNO3d.coverage" NAME="AC3D_TNO3d Coverage Results" MODIFIED="1741561294310" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
+    <SUITE FILE_PATH="coverage/PhaseField_SANO3D$CH3D_FNO3d.coverage" NAME="SH3D_TNO3d Coverage Results" MODIFIED="1741861381348" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
+    <SUITE FILE_PATH="coverage/PhaseField_SANO3D$AC3D_TNO3d.coverage" NAME="AC3D_TNO3d Coverage Results" MODIFIED="1743081225414" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
     <SUITE FILE_PATH="coverage/PhaseField_SANO3$PFV3D_FNO3d.coverage" NAME="PFV3D_FNO3d Coverage Results" MODIFIED="1741564487710" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$RunScript1.coverage" NAME="RunScript1 Coverage Results" MODIFIED="1736368790622" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$SH2D.coverage" NAME="SH2D Coverage Results" MODIFIED="1732347080402" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />

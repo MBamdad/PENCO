@@ -25,9 +25,9 @@ T_in = 1
 T_out = 20 # 100
 
 # Training Setting
-normalized = True
-training = True # False  # True
-load_model = False # False #True
+normalized = True # False
+training = True # False  #   True
+load_model = False # True # False # False #True
 
 # Database
 parent_dir = './data/'

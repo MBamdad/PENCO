@@ -1,7 +1,7 @@
 import numpy as np
 
 # General Setting
-gpu_number = 'cuda:3'  # 'cuda:1'
+gpu_number = 'cuda:2'  # 'cuda:1'
 torch_seed = 0
 numpy_seed = 0
 
@@ -25,7 +25,7 @@ T_in = 1
 T_out = 20 # 100
 
 # Training Setting
-normalized = True
+normalized = True # False #True
 training = True # False  # True
 load_model = False # False #True
 

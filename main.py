@@ -3,14 +3,17 @@ import importlib
 import torch
 import inspect
 import numpy as np
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
 from training import train_fno, train_fno_time
 from torch.utils.data import DataLoader, random_split
 from utilities import ImportDataset, count_params, LpLoss, ModelEvaluator
-from post_processing import plot_loss_trend, plot_field_trajectory, make_video, save_vtk
+from post_processing import plot_loss_trend, plot_field_trajectory, make_video, save_vtk, plot_xy_plane_subplots
 import time  # Import the time module at the beginning of the script
 from torch_optimizer import Lamb
+
 ################################################################
 # Problem Definition
 ################################################################
@@ -28,8 +31,8 @@ problem = 'SH3D'
 
 #network_name = 'TNO2d'
 # network_name = 'FNO2d'
-#network_name = 'FNO3d'
-network_name = 'TNO3d'
+network_name = 'FNO3d'
+#network_name = 'TNO3d'
 
 print(f"problem = {problem}")
 print(f"network = {network_name}")
@@ -72,6 +75,20 @@ normalizers = [dataset.normalizer_x, dataset.normalizer_y] if cf.normalized is T
 
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=cf.batch_size, shuffle=True)
 test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=cf.batch_size, shuffle=False)
+
+''''
+for batch in train_loader:
+    if isinstance(batch, (tuple, list)):  # If dataset returns multiple tensors (e.g., input, output)
+        print("Batch contains multiple tensors:")
+        for i, tensor in enumerate(batch):
+            print(f"Tensor {i} shape: {tensor.shape}")
+            print(f"Tensor {i} values:\n{tensor}")  # Print the tensor values
+    else:
+        print("Batch shape:", batch.shape)  # If dataset returns a single tensor
+        print("Batch values:\n", batch)  # Print the values of the batch
+    break  # Only print the first batch
+'''
+
 ################################################################
 # training and evaluation
 ################################################################
@@ -120,9 +137,15 @@ if cf.training:
                            optimizer, scheduler, cf.normalized, normalizers, device))
         train_mse_log = []
     else:
+
         model, train_mse_log, train_l2_log, test_l2_log = (
-            train_fno(model, myloss, cf.epochs, cf.batch_size, train_loader, test_loader,
-                      optimizer, scheduler, cf.normalized, normalizers, device))
+           train_fno(model, myloss, cf.epochs, cf.batch_size, train_loader, test_loader,
+                       optimizer, scheduler, cf.normalized, normalizers, device))
+
+        #model, train_mse_log, train_l2_log, test_l2_log = train_fno_physics(model, myloss, cf.epochs, cf.batch_size, train_loader, test_loader,
+        #                  optimizer, scheduler, cf.normalized, normalizers, device,
+        #                  physics_weight=0.1, bc_weight=0.1, epsilon=0.05, delta_t=0.01)
+
     print(f"Saving model and logs to {model_path}")
     torch.save({
         'model': model,
@@ -183,9 +206,41 @@ field_names = ['Exact Value', 'Predicted Value', 'Error']
 # plot_range = [[-0.75, 0.75], [-0.75, 0.75], [-0.5, 0.5]]
 plot_range = [[-1.2, 1.2], [-1.2, 1.2], [-0.6, 0.6]]
 # plot_range = [[-1.0, 1.0], [-1.0, 1.0], [0.0, 1.0]]
-plot_field_trajectory(cf.domain, fields, field_names, cf.time_steps, plot_range, problem, network_name, plot_show=True,
-                          interpolation=True)
+#plot_field_trajectory(cf.domain, fields, field_names, cf.time_steps, plot_range, problem, network_name, plot_show=True,
+#                          interpolation=True)
 
 # make_video(u_pred, cf.domain, "predicted", plot_range, problem)
 # make_video(u_exact, cf.domain, "exact", plot_range, problem)
 
+# First check your field dimensions
+print(f"Field shape: {u_exact.shape}")  # Should be [Nx, Ny, Nz, num_time_steps]
+
+# Define time steps to plot (make sure they're within your data range)
+selected_time_steps = [0, 4, 8, 12, 16, 19]  # Adjust based on your actual time steps
+
+# Plot exact solution
+plot_xy_plane_subplots(domain=cf.domain,
+                      field=u_exact,
+                      field_name='Exact Solution',
+                      time_steps=selected_time_steps,
+                      plot_range=plot_range[0],
+                      problem=problem,
+                      network_name=network_name)
+
+# Plot predicted solution
+plot_xy_plane_subplots(domain=cf.domain,
+                      field=u_pred,
+                      field_name='Predicted Solution',
+                      time_steps=selected_time_steps,
+                      plot_range=plot_range[1],
+                      problem=problem,
+                      network_name=network_name)
+
+# Plot error
+plot_xy_plane_subplots(domain=cf.domain,
+                      field=error,
+                      field_name='Error',
+                      time_steps=selected_time_steps,
+                      plot_range=plot_range[2],
+                      problem=problem,
+                      network_name=network_name)

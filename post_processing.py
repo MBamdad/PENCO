@@ -1,6 +1,7 @@
 import os
 import cv2
 import vtk
+import torch
 import numpy as np
 import matplotlib
 
@@ -203,3 +204,52 @@ def save_vtk(filename, array, grid_shape):
     writer.Write()
 
     print(f"Saved VTK file: {filename}")
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+
+def plot_xy_plane_subplots(domain, field, field_name, time_steps, plot_range, problem, network_name, figsize=(12, 8)):
+    """
+    Plot 2D x-y plane (z=0) subplots of 3D field data at different time steps in a 2x3 grid.
+    """
+    folder = os.path.join(problem, f"plots_{network_name}")
+    os.makedirs(folder, exist_ok=True)
+
+    field_np = field.cpu().numpy() if torch.is_tensor(field) else field
+
+    fig, axes = plt.subplots(2, 3, figsize=figsize)
+    axes = axes.ravel()
+
+    vmin, vmax = plot_range
+    norm = plt.Normalize(vmin=vmin, vmax=vmax)
+
+    for i, time_step in enumerate(time_steps):
+        ax = axes[i]
+        xy_plane = field_np[:, :, 0, time_step]
+
+        im = ax.imshow(xy_plane,
+                       extent=(domain[0], domain[1], domain[0], domain[1]),
+                       aspect='equal',
+                       cmap='jet',
+                       norm=norm,
+                       interpolation='bilinear')
+
+        ax.set_title(f't={time_step}', pad=10)
+        ax.axis('off')
+
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax)
+
+    fig.suptitle(f'{field_name} Evolution (x-y plane at z=0)', y=1.02, fontsize=14)
+    plt.tight_layout()
+
+    # Corrected saving parameters
+    plot_name = os.path.join(folder, f'{field_name}_subplots.png')
+    plt.savefig(plot_name,
+                dpi=300,
+                bbox_inches='tight')
+    plt.close()
