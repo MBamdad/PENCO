@@ -92,6 +92,7 @@ class UnitGaussianNormalizer(object):
 
     def decode(self, x, sample_idx=None):
         # sample_idx is the spatial sampling mask
+        #print('x shape in decode: ', x.shape)
         global std, mean
         if sample_idx is None:
             std = self.std + self.eps  # n
@@ -182,14 +183,19 @@ class RangeNormalizer(object):
 
 # loss function with rel/abs Lp loss
 class LpLoss(object):
-    def __init__(self, d=2, p=2, size_average=True, reduction=True):
+    #def __init__(self, d=2, p=2, size_average=True, reduction=True):
+    #    super(LpLoss, self).__init__()
+    def __init__(self, d=2, p=2, l1_weight=0.0, size_average=True, reduction=True):
         super(LpLoss, self).__init__()
+        assert d > 0 and p > 0
+
 
         # Dimension and Lp-norm type are postive
         assert d > 0 and p > 0
 
         self.d = d
         self.p = p
+        self.l1_weight = l1_weight  # Weight for the L1 compon
         self.reduction = reduction
         self.size_average = size_average
 
@@ -224,8 +230,26 @@ class LpLoss(object):
 
         return diff_norms / y_norms
 
+    #def __call__(self, x, y):
+    #    return self.rel(x, y)
+    # --- UPDATE THE __call__ METHOD ---
     def __call__(self, x, y):
-        return self.rel(x, y)
+        # Calculate the primary loss (e.g., L2)
+        primary_loss = self.rel(x, y)
+
+        # If an L1 weight is specified, calculate and add the L1 loss
+        if self.l1_weight > 0:
+            # Temporarily set p=1 to calculate L1 loss
+            original_p = self.p
+            self.p = 1
+            l1_loss = self.rel(x, y)
+            self.p = original_p  # Restore original p
+
+            # Return the weighted combination
+            return (1.0 - self.l1_weight) * primary_loss + self.l1_weight * l1_loss
+        else:
+            # If no L1 weight, return the primary loss as before
+            return primary_loss
 
 
 # Sobolev norm (HS norm)

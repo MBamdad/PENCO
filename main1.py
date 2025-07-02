@@ -4,56 +4,55 @@ import torch
 import inspect
 import numpy as np
 import matplotlib
-
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
-from training import train_fno, train_fno_time, train_hybrid, compute_initial_loss_scaler
+from training import train_fno, train_fno_time, train_hybrid
 from torch.utils.data import DataLoader, random_split
 from utilities import ImportDataset, count_params, LpLoss, ModelEvaluator
-from post_processing import plot_loss_trend, plot_combined_results_3d, plot_combined_results, plot_field_trajectory, \
-    make_video, save_vtk, plot_xy_plane_subplots
+from post_processing import plot_loss_trend, plot_combined_results_3d, plot_combined_results, plot_field_trajectory, make_video, save_vtk, plot_xy_plane_subplots
 import time  # Import the time module at the beginning of the script
 from torch_optimizer import Lamb
+import scipy.io
 
 ################################################################
 # Problem Definition
 ################################################################
 # problem = 'AC2D'
-# problem = 'AC3D'
+#problem = 'AC3D'
 # problem = 'CH2DNL'
 # problem = 'SH2D'
 problem = 'SH3D'
 # problem = 'PFC2D'
-# problem = 'PFC3D'
-# problem = 'MBE2D'
-# problem = 'MBE3D'
+#problem = 'PFC3D'
+#problem = 'MBE2D'
+#problem = 'MBE3D'
 # problem = 'CH2D'
-# problem = 'CH3D'
+#problem = 'CH3D'
 
-# network_name = 'TNO2d'
+#network_name = 'TNO2d'
 # network_name = 'FNO2d'
 #network_name = 'FNO3d'
 network_name = 'TNO3d'
 
-PINN_MODE =  True #False #  False #  False  # False #
+PINN_MODE = False # True # False #
 
 print(f"problem = {problem}")
 print(f"network = {network_name}")
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-cf = importlib.import_module(f"configs.config_{problem}_{network_name}")  # configuration file
+cf = importlib.import_module(f"configs.config_{problem}_{network_name}") # configuration file
 # above line means: import configs.config_PFC3D_TNO3d as cf
-network = getattr(importlib.import_module('networks'), network_name)  # from networks import TNO3d
+network = getattr(importlib.import_module('networks'), network_name) # from networks import TNO3d
 torch.manual_seed(cf.torch_seed)
 np.random.seed(cf.numpy_seed)
-# device = torch.device(cf.gpu_number if torch.cuda.is_available() else 'cpu')
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+#device = torch.device(cf.gpu_number if torch.cuda.is_available() else 'cpu')
+device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
 print("Device: ", device)
 # --- Define Output Directory ---
 
 
 PDE_WEIGHT = cf.pde_weight
-#PDE_LOSS_SCALER = cf.pde_loss_scaler
+PDE_LOSS_SCALER = cf.pde_loss_scaler
 
 if PINN_MODE:
     run_descriptor = f"PINN_w{int(PDE_WEIGHT * 100)}"
@@ -62,10 +61,9 @@ else:
     run_descriptor = "DataDriven"
     output_subdir = f"plots_{network_name}"  # Original data-driven output
 
-# model_run_name = f'{network_name}_{problem}_S{cf.s}_T{cf.T_in}to{cf.T_out}_w{cf.width}_m{cf.modes}_q{cf.width_q}_h{cf.width_h}_{run_descriptor}'
-# model_run_name = f'{network_name}_{problem}_S{cf.s}_T{cf.T_in}to{cf.T_out}_width{cf.width}_modes{cf.modes}_q{cf.width_q}_h{cf.width_h}_SH3D_random_sphere_finial.pt'
-model_run_name = f'{network_name}_{problem}_S{cf.s}_T{cf.T_in}to{cf.T_out}_width{cf.width}_modes{cf.modes}_q{cf.width_q}_h{cf.width_h}_grf3d.pt'
-model_dir = os.path.join(problem, 'models')  # models_smpooth
+#model_run_name = f'{network_name}_{problem}_S{cf.s}_T{cf.T_in}to{cf.T_out}_w{cf.width}_m{cf.modes}_q{cf.width_q}_h{cf.width_h}_{run_descriptor}'
+model_run_name = f'{network_name}_{problem}_S{cf.s}_T{cf.T_in}to{cf.T_out}_width{cf.width}_modes{cf.modes}_q{cf.width_q}_h{cf.width_h}.pt'
+model_dir = os.path.join(problem, 'models') # models_smpooth
 model_name = f'{model_run_name}'
 model_path = os.path.join(model_dir, model_name)
 
@@ -83,7 +81,7 @@ start_time = time.time()
 ################################################################
 # load data and data normalization
 ################################################################
-# model_dir = problem + '/models'
+#model_dir = problem + '/models'
 
 print(f"model = {model_name}")
 print(f"number of epoch = {cf.epochs}")
@@ -107,7 +105,7 @@ normalizers = [dataset.normalizer_x, dataset.normalizer_y] if cf.normalized is T
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=cf.batch_size, shuffle=True)
 test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=cf.batch_size, shuffle=False)
 
-############AA####################################################
+################################################################
 # training and evaluation
 ################################################################
 sig = inspect.signature(network.__init__)
@@ -120,19 +118,19 @@ elif network_name == 'TNO2d':
 elif network_name == 'FNO3d':
     model = network(cf.modes, cf.modes, cf.modes, cf.width, cf.width_q, cf.T_in, cf.T_out, cf.n_layers).to(device)
 elif network_name == 'TNO3d':
-    model = network(cf.modes, cf.modes, cf.modes, cf.width, cf.width_q, cf.width_h, cf.T_in, cf.T_out, cf.n_layers).to(
-        device)
+    model = network(cf.modes, cf.modes, cf.modes, cf.width, cf.width_q, cf.width_h, cf.T_in, cf.T_out, cf.n_layers).to(device)
 else:
     raise Exception("network_name is not correct")
 
-print(count_params(model))  # Print model parameters
-train_mse_log, train_l2_log, test_l2_log = [], [], []  # Initialize logs
+print(count_params(model))      # Print model parameters
+train_mse_log, train_l2_log, test_l2_log = [], [], []       # Initialize logs
 
 # Load the entire model and logs
 if os.path.exists(model_path) and cf.load_model:
     print(f"Loading pre-trained model from {model_path}")
     checkpoint = torch.load(model_path, map_location=device)
-    model = checkpoint['model']
+    model.load_state_dict(checkpoint['model_state_dict']) # Use this line if you only save state_dict
+    #model = checkpoint['model'] # Use this line if you save the entire model object
     train_mse_log = checkpoint.get('train_mse_log', [])
     train_l2_log = checkpoint.get('train_l2_log', [])
     test_l2_log = checkpoint.get('test_l2_log', [])
@@ -142,16 +140,14 @@ else:
 # Define optimizer, scheduler, and loss function
 optimizer = torch.optim.Adam(model.parameters(), lr=cf.learning_rate, weight_decay=cf.weight_decay)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cf.iterations)
-myloss = LpLoss(p=2, l1_weight=0.0, size_average=False)
+myloss = LpLoss(size_average=False)
 
-# COMPUTE THE DYNAMIC SCALER
-# Use the train_loader to get a representative batch
-
+###
 
 # Train the model
 if cf.training:
     print("\n--- Starting Training ---")
-    if PINN_MODE:  # Use PINN loop regardless of weight (handles pde_weight=0 case)
+    if PINN_MODE:
         grid_info = {
             'Nx': cf.s, 'Ny': cf.s, 'Nz': cf.s,
             'Lx': cf.Lx, 'Ly': cf.Lx, 'Lz': cf.Lx,
@@ -159,35 +155,22 @@ if cf.training:
             'T_out': cf.T_out
         }
 
-        pde_loss_scaler = compute_initial_loss_scaler(
-            model,
-            train_loader,
-            myloss,
-            cf.normalized,
-            normalizers,
-            device,
-            grid_info,
-            cf.epsilon,
-            problem
-        )
-
-
         if PDE_WEIGHT == 0.0:
             print("Running PINN training loop with pde_weight=0 (Data-Driven only loss).")
         else:
             print(
-                f"Running PINN training loop with pde_weight={PDE_WEIGHT:.2f}, using PDE Scaler: {pde_loss_scaler:.2e}")
+                f"Running PINN training loop with pde_weight={PDE_WEIGHT:.2f}, using PDE Scaler: {PDE_LOSS_SCALER:.2e}")
 
         model, train_mse_hybrid_log, train_l2_hybrid_log, test_data_log, test_pde_loss_scaled_log, train_data_log, train_pde_scaled_log, test_loss_hybrid_log = (
             train_hybrid(model, myloss, cf.epochs, cf.batch_size, train_loader, test_loader,
                          optimizer, scheduler, cf.normalized, normalizers, device,
                          PDE_WEIGHT, grid_info, cf.epsilon, problem,
-                         pde_loss_scaler=pde_loss_scaler)
+                         pde_loss_scaler=PDE_LOSS_SCALER)
         )
 
         print(f"Saving model and logs to {model_path}")
         torch.save({
-            'model': model,
+            'model_state_dict': model.state_dict(),
             'train_mse_log': train_mse_hybrid_log,
             'train_l2_log': train_l2_hybrid_log,
             'test_l2_log': test_data_log,
@@ -197,31 +180,32 @@ if cf.training:
             'test_loss_hybrid_log': test_loss_hybrid_log
         }, model_path)
 
-    else:  # Original Data-Driven Mode
-        if network_name == 'FNO2d' or network_name == 'FNO3d':
+    else:
+        if network_name in ['FNO2d', 'FNO3d']:
             model, train_l2_log, test_l2_log = (
                 train_fno_time(model, myloss, cf.epochs, cf.batch_size, train_loader, test_loader,
                                optimizer, scheduler, cf.normalized, normalizers, device))
             train_mse_log = []
         else:
             model, train_mse_log, train_l2_log, test_l2_log = (
-                train_fno(model, myloss, cf.epochs, cf.batch_size, train_loader, test_loader,
-                          optimizer, scheduler, cf.normalized, normalizers, device))
+               train_fno(model, myloss, cf.epochs, cf.batch_size, train_loader, test_loader,
+                           optimizer, scheduler, cf.normalized, normalizers, device))
 
-    print(f"Saving model and logs to {model_path}")
-    torch.save({
-        'model': model,
-        'train_mse_log': train_mse_log,
-        'train_l2_log': train_l2_log,
-        'test_l2_log': test_l2_log
-    }, model_path)
+        print(f"Saving model and logs to {model_path}")
+        torch.save({
+            'model_state_dict': model.state_dict(),
+            'train_mse_log': train_mse_log,
+            'train_l2_log': train_l2_log,
+            'test_l2_log': test_l2_log
+        }, model_path)
+
 
 end_time = time.time()
 Final_time = round(end_time - start_time, 2)
 print(f"Total Execution Time: {Final_time} seconds")
 
 evaluator = ModelEvaluator(model, test_dataset, cf.s, cf.T_in, cf.T_out, device, cf.normalized, normalizers,
-                           time_history=(network_name == 'FNO2d'))
+                           time_history=(network_name in ['FNO2d', 'FNO3d']))
 
 results = evaluator.evaluate(loss_fn=myloss)
 inp = results['input']
@@ -230,14 +214,14 @@ exact = results['exact']
 test_l2_avg = results["average"]
 
 if PINN_MODE:
-    losses = [train_l2_hybrid_log, test_loss_hybrid_log, test_data_log, test_pde_loss_scaled_log, train_data_log,
-              train_pde_scaled_log]
+    losses = [train_l2_hybrid_log, test_loss_hybrid_log, test_data_log, test_pde_loss_scaled_log, train_data_log, train_pde_scaled_log]
     labels = ['Train L2 Hyb', 'Test L2 Hyb', 'Test L2 data', 'Test pde_scaled', 'Train data', 'Train pde']
     plot_loss_trend(losses, labels, problem, network_name, Final_time, test_l2_avg, plot_dir, PDE_WEIGHT)
 else:
     losses = [train_l2_log, test_l2_log]
     labels = ['Train L2', 'Test L2']
     plot_loss_trend(losses, labels, problem, network_name, Final_time, test_l2_avg, plot_dir, PDE_WEIGHT)
+
 
 ################################################################
 # post-processing
@@ -247,123 +231,115 @@ u_pred = pred[cf.index]
 u_exact = exact[cf.index]
 error = u_pred - u_exact
 
-print(f"DEBUG: Shape of u_exact passed to plotting function: {u_exact.shape}")
-print(f"DEBUG: Shape of u_pred passed to plotting function: {u_pred.shape}")
-
 plot_range = [[-1.2, 1.2], [-1.2, 1.2], [-0.6, 0.6]]
+print(f"Field shape: {u_exact.shape}")
 
-# =========================================================================================
-# ===                START OF MODIFIED PLOTTING PREPARATION BLOCK                      ===
-# =========================================================================================
+selected_time_steps = [0, 2, 4, 6, 8, 9]
 
-# 1. Get the initial condition (t=0) data for the chosen sample index
-a_ind = inp[cf.index]
-print(f"Shape of initial condition (t=0) data 'a_ind': {a_ind.shape}")
+# Plot exact solution
+plot_xy_plane_subplots(domain=cf.domain,
+                      field=u_exact,
+                      field_name='Exact Solution',
+                      time_steps=selected_time_steps,
+                      plot_range=plot_range[0],
+                      problem=problem,
+                      network_name=network_name)
 
-# 2. Separate desired times into t=0 vs. future predictions
-desired_times = cf.time_steps
-future_times_to_plot = []
-has_initial_condition = (0 in desired_times)
-for t in desired_times:
-    if t > 0:
-        future_times_to_plot.append(t)
+# Plot predicted solution
+plot_xy_plane_subplots(domain=cf.domain,
+                      field=u_pred,
+                      field_name='Predicted Solution',
+                      time_steps=selected_time_steps,
+                      plot_range=plot_range[1],
+                      problem=problem,
+                      network_name=network_name)
 
-# 3. Translate the FUTURE times to array indices
-indices_to_plot = []
-valid_future_times = []
-for t in future_times_to_plot:
-    if t <= cf.T_out:
-        indices_to_plot.append(t - 1)
-        valid_future_times.append(t)
-    else:
-        print(f"Warning: Time t={t} is out of valid prediction range. Skipping.")
-print(f"Plotting for future times: {valid_future_times} --> which correspond to array indices: {indices_to_plot}")
+# Plot error
+plot_xy_plane_subplots(domain=cf.domain,
+                      field=error,
+                      field_name='Error',
+                      time_steps=selected_time_steps,
+                      plot_range=plot_range[2],
+                      problem=problem,
+                      network_name=network_name)
 
-# 4. MOVE ALL DATA TO THE TARGET DEVICE BEFORE OPERATIONS
-t0_data_cpu = a_ind
-u_exact_cpu = u_exact
-u_pred_cpu = u_pred
-error_cpu = error
 
-t0_data_gpu = t0_data_cpu.to(device)
-u_exact_gpu = u_exact_cpu.to(device)
-u_pred_gpu = u_pred_cpu.to(device)
-error_gpu = error_cpu.to(device)
-indices_tensor_gpu = torch.tensor(indices_to_plot, device=device)
+# ==============================================================================
+# NEW SECTION: PREDICT AND VISUALIZE A SINGLE TRAJECTORY EVOLUTION
+# ==============================================================================
+print("\n--- Generating Visualization for a Single Predicted Trajectory ---")
 
-# 5. PREPARE COMBINED TENSORS FOR PLOTTING on the GPU
-if has_initial_condition:
-    # --- ### FIXED DIMENSION HANDLING ### ---
-    # `a_ind` has shape (sx, sy, sz, 1) where the last dim is a channel.
-    # `u_exact_gpu` has shape (sx, sy, sz, T) where the last dim is time.
-    # They are both 4D, so we can concatenate them directly if the last dimension is treated as the time dimension.
-    # We don't need to do any reshaping. `t0_data_gpu` is already correct.
-    t0_for_concat = t0_data_gpu
+# Ensure dt_simulation is defined in the config file.
+if not hasattr(cf, 'dt_simulation'):
+    raise AttributeError("Configuration file is missing 'dt_simulation'. Please add it (e.g., dt_simulation = 0.00002).")
 
-    # Select the future time slices from the GPU tensors
-    u_exact_selected = u_exact_gpu.index_select(-1, indices_tensor_gpu)
-    u_pred_selected = u_pred_gpu.index_select(-1, indices_tensor_gpu)
-    error_selected = error_gpu.index_select(-1, indices_tensor_gpu)
+predicted_trajectory = u_pred # Shape: (s, s, s, T_out)
 
-    # Combine t=0 data with the selected future steps
-    u_exact_for_plot = torch.cat((t0_for_concat, u_exact_selected), dim=-1)
-    u_pred_for_plot = torch.cat((t0_for_concat, u_pred_selected), dim=-1)
+# 1. Choose 4 suitable time frames for visualization from the predicted steps.
+num_time_frames_to_plot = 4
+total_predicted_steps = predicted_trajectory.shape[-1]  # This is T_out
 
-    # The error for t=0 is zero by definition
-    error_t0 = torch.zeros_like(t0_for_concat)
-    error_for_plot = torch.cat((error_t0, error_selected), dim=-1)
-
-    final_indices = list(range(len(desired_times)))
-    final_labels = desired_times
+if total_predicted_steps < 1:
+    print("No time steps to plot in the predicted trajectory.")
 else:
-    u_exact_for_plot = u_exact_gpu
-    u_pred_for_plot = u_pred_gpu
-    error_for_plot = error_gpu
-    final_indices = indices_to_plot
-    final_labels = valid_future_times
+    # Select 4 evenly spaced indices from the available time steps.
+    time_indices_to_plot = np.linspace(0, total_predicted_steps - 1, num_time_frames_to_plot, dtype=int).tolist()
 
-print(f"Final data prepared for plotting with shape: {u_exact_for_plot.shape}")
-print(f"Final indices for plotting: {final_indices}")
-print(f"Final labels for plotting: {final_labels}")
+    print(f"Selected time indices for plotting: {time_indices_to_plot}")
 
-# Plot XY-plane for the "Exact" solution trajectory (includes t=0)
-plot_xy_plane_subplots(domain=cf.domain,
-                       field=u_exact_for_plot,
-                       field_name='Exact Solution',
-                       time_steps=final_indices,
-                       desired_times=final_labels,
-                       plot_range=plot_range[0],
-                       problem=problem,
-                       network_name=network_name)
+    # 2. Create the subplot (1 row, 4 columns) and save it.
+    fig, axes = plt.subplots(1, num_time_frames_to_plot, figsize=(5 * num_time_frames_to_plot, 5), squeeze=False)
+    axes = axes.flatten()
 
-# Plot XY-plane for the "Predicted" solution trajectory (includes t=0 from input)
-plot_xy_plane_subplots(domain=cf.domain,
-                       field=u_pred_for_plot,
-                       field_name='Predicted Solution',
-                       time_steps=final_indices,
-                       desired_times=final_labels,
-                       plot_range=plot_range[1],
-                       problem=problem,
-                       network_name=network_name)
+    vmin = predicted_trajectory.cpu().numpy().min()
+    vmax = predicted_trajectory.cpu().numpy().max()
+    s = cf.s
+    slice_index = s // 2  # Middle slice in the Z-direction
 
-# Plot XY-plane for the "Error" (error is 0 at t=0)
-plot_xy_plane_subplots(domain=cf.domain,
-                       field=error_for_plot,
-                       field_name='Error',
-                       time_steps=final_indices,
-                       desired_times=final_labels,
-                       plot_range=plot_range[2],
-                       problem=problem,
-                       network_name=network_name)
+    for i, t_idx in enumerate(time_indices_to_plot):
+        # 3. Calculate the correct physical time for the label.
+        # The prediction starts after T_in steps.
+        physical_time = (cf.T_in + t_idx) * cf.dt_simulation
 
-# Calculate L2 norm on original full prediction
+        slice_2d = predicted_trajectory[:, :, slice_index, t_idx].cpu().numpy()
+
+        ax = axes[i]
+        im = ax.imshow(slice_2d, cmap='viridis', vmin=vmin, vmax=vmax,
+                       extent=[0, cf.Lx, 0, cf.Ly], origin='lower', interpolation='bicubic')
+        ax.set_title(f'Predicted t={physical_time:.2e}') # Use scientific notation for time
+        ax.set_xlabel('x')
+        if i == 0:
+            ax.set_ylabel('y')
+
+    fig.colorbar(im, ax=axes.tolist(), orientation='vertical', pad=0.02)
+    z_coord = cf.Lx / s * (slice_index - s / 2)
+    fig.suptitle(f'Predicted Evolution (Z-slice at z={z_coord:.2f})', fontsize=16)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+
+    subplot_filename = os.path.join(plot_dir, f'{model_run_name}_single_trajectory_subplot.png')
+    plt.savefig(subplot_filename, dpi=300, bbox_inches='tight')
+    print(f"Trajectory subplot saved to {subplot_filename}")
+    plt.close(fig)
+
+# END OF NEW SECTION
+# ==============================================================================
+
+# The p=2 explicitly specifies the L2 norm.
 l2_norm_error = torch.norm(u_pred - u_exact, p=2)
+
+# Calculate the L2 norm of the exact solution
 l2_norm_exact = torch.norm(u_exact, p=2)
+
+# Calculate the relative L2 norm error
 epsilon = 1e-8
 if l2_norm_exact.item() > epsilon:
     relative_l2_error = l2_norm_error / l2_norm_exact
 else:
-    relative_l2_error = torch.tensor(0.0) if l2_norm_error.item() < epsilon else torch.tensor(float('inf'))
+    if l2_norm_error.item() < epsilon:
+        relative_l2_error = torch.tensor(0.0, device=u_pred.device, dtype=u_pred.dtype)
+    else:
+        print(f"Warning: L2 norm of exact solution is {l2_norm_exact.item()}, which is close to zero. L2 norm of error is {l2_norm_error.item()}.")
+        relative_l2_error = torch.tensor(float('inf'), device=u_pred.device, dtype=u_pred.dtype)
 
 print(f"L2 norm of error: {l2_norm_error.item()}")
 print(f"L2 norm of exact solution: {l2_norm_exact.item()}")
@@ -371,44 +347,43 @@ print(f"Relative L2 norm error: {relative_l2_error.item()}")
 relative_l2_error_percentage = (relative_l2_error * 100)
 print(f"Relative L2 norm error (percentage): {relative_l2_error_percentage.item()}%")
 
-# Call the combined results plots with the prepared data
+###
 plot_combined_results(
     domain=cf.domain,
-    u_exact=u_exact_for_plot,
-    u_pred=u_pred_for_plot,
-    error=error_for_plot,
-    plot_ranges=plot_range,
+    u_exact=u_exact,
+    u_pred=u_pred,
+    error=error,
+    plot_ranges=[
+        [-1.2, 1.2],
+        [-1.2, 1.2],
+        [-1.2, 1.2]
+    ],
     problem=problem,
     network_name=network_name,
-    plot_dir=plot_dir,
-    pde_weight=PDE_WEIGHT,
-    time_steps_indices=final_indices,
-    desired_times=final_labels
+    plot_dir = plot_dir,
+    pde_weight = PDE_WEIGHT
 )
 
 plot_combined_results_3d(
     domain=cf.domain,
-    u_exact=u_exact_for_plot,
-    u_pred=u_pred_for_plot,
-    error=error_for_plot,
-    plot_ranges=plot_range,
+    u_exact=u_exact,
+    u_pred=u_pred,
+    error=error,
+    plot_ranges=[
+        [-1.2, 1.2],
+        [-1.2, 1.2],
+        [-1.2, 1.2]
+    ],
     problem=problem,
     network_name=network_name,
-    plot_dir=plot_dir,
-    pde_weight=PDE_WEIGHT,
-    time_steps_indices=final_indices,
-    desired_times=final_labels
+    plot_dir = plot_dir,
+    pde_weight = PDE_WEIGHT
 )
-
-# =========================================================================================
-# ===                 END OF MODIFIED PLOTTING PREPARATION BLOCK                       ===
-# =========================================================================================
 
 ################################################################
 # Save Results to MATLAB .mat file
 ################################################################
 print("\n--- Saving Results to .mat File ---")
-import scipy.io
 
 mat_filename = os.path.join(plot_dir, f'{model_run_name}_results.mat')
 
@@ -426,7 +401,7 @@ if PINN_MODE:
             'test_prediction': pred.cpu().numpy(),
             'test_exact': exact.cpu().numpy(),
             'config_pde_weight': PDE_WEIGHT if PINN_MODE else 0.0,
-            'config_pde_loss_scaler': pde_loss_scaler if PINN_MODE else 0.0,
+            'config_pde_loss_scaler': PDE_LOSS_SCALER if PINN_MODE else 0.0,
             'config_epochs': cf.epochs,
             'config_lr': cf.learning_rate,
             'config_T_in': cf.T_in,

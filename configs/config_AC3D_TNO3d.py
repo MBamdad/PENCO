@@ -26,8 +26,8 @@ T_out = 20 # 100
 
 # Training Setting
 normalized = True
-training = False # True  # False
-load_model = True  #  False # True  # True
+training = True  # False #  False
+load_model = False # True  #  True  # True
 
 # Database
 parent_dir = './data/'
@@ -43,3 +43,29 @@ domain = [-np.pi, np.pi]
 #               54, 59, 64, 69, 74, 79, 84, 89, 94, 99]
 #time_steps = [39, 59, 79]
 time_steps = [0, 9, 19]
+
+
+#############
+Lx = np.pi            # Domain size from MATLAB
+# Time Discretization Parameters (from AC3D MATLAB)
+dt_sim = 0.0001     # Time step in the MATLAB simulation
+Nt_sim = 50        # Total number of simulation steps in MATLAB
+num_saved_steps_sim = 101 # Number of steps saved in the .mat file (Nt_sim + 1)
+# ns_sim = Nt_sim / (num_saved_steps_sim - 1) if num_saved_steps_sim > 1 else 1.0 # Saving interval in sim steps
+# dt_model = ns_sim * dt_sim # Effective time step between frames in your data/model output
+# For AC3D, MATLAB code saves all Nt+1 steps. So ns_sim = 1.
+dt_model = dt_sim # If T_out steps directly correspond to dt_sim steps after T_in
+# PDE Parameters for Allen-Cahn (AC3D)
+# From your MATLAB: epsilon = 0.1, Cahn = epsilon^2.
+# The PDE implemented in calculate_pde_residual was:
+# du/dt = Cahn_ac * laplacian(u) - (u^3 - u)
+epsilon = 0.1  # The epsilon from your AC3D MATLAB script, PDE parameter
+# PINN Specific Settings (if PINN_MODE is True in main.py)
+pde_weight = 0.5   # Example: 50% physics loss, 70% data loss. Adjust as needed.
+# PDE_LOSS_SCALER will be defined in main.py, but you might note its value here for reference
+
+# Learning Rate Scheduler Parameters (for StepLR)
+scheduler_step = 20  # Decay learning rate every 20 epochs
+scheduler_gamma = 0.5 # Multiply learning rate by 0.5 each time
+
+pde_loss_scaler = 1e-3

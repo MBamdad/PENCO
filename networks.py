@@ -460,8 +460,6 @@ def compute_spatial_derivatives(field, coordinates):
         laplacian += d2phi
 
     return laplacian
-
-
 def compute_allen_cahn_loss(predictions, coordinates, epsilon=0.05, delta_t=0.01):
     """
     Robust physics loss calculation for Allen-Cahn equation
