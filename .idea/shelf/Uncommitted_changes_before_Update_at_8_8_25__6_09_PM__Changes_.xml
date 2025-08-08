@@ -1,0 +1,34 @@
+<changelist name="Uncommitted_changes_before_Update_at_8_8_25,_6_09_PM_[Changes]" date="1754669346335" recycled="false" toDelete="true">
+  <option name="PATH" value="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Update_at_8_8_25,_6_09_PM_[Changes]/shelved.patch" />
+  <option name="DESCRIPTION" value="Uncommitted changes before Update at 8/8/25, 6:09 PM [Changes]" />
+  <binary>
+    <option name="BEFORE_PATH" value="SH3D/plots_TNO3d/TNO3d_SH3D_S32_T1to100_width12_modes14_q12_h6_grf3d.pt_results_field_comparison.png" />
+    <option name="AFTER_PATH" />
+    <option name="SHELVED_PATH" />
+  </binary>
+  <binary>
+    <option name="BEFORE_PATH" value="SH3D/plots_TNO3d/SH3D_SANO_loss_curve.png" />
+    <option name="AFTER_PATH" />
+    <option name="SHELVED_PATH" />
+  </binary>
+  <binary>
+    <option name="BEFORE_PATH" value="SH3D/plots_TNO3d/SH3D_SANO_field_comparison_FINAL.png" />
+    <option name="AFTER_PATH" />
+    <option name="SHELVED_PATH" />
+  </binary>
+  <binary>
+    <option name="BEFORE_PATH" value="SH3D/plots_TNO3d/SH3D_SANO_field_comparison.png" />
+    <option name="AFTER_PATH" />
+    <option name="SHELVED_PATH" />
+  </binary>
+  <binary>
+    <option name="BEFORE_PATH" value="SH3D/plots_TNO3d/TNO3d_SH3D_S32_T1to100_width12_modes14_q12_h6_grf3d.pt_results_loss_curve.png" />
+    <option name="AFTER_PATH" />
+    <option name="SHELVED_PATH" />
+  </binary>
+  <binary>
+    <option name="BEFORE_PATH" value="SH3D/plots_TNO3d/SH3D_Comparison_Plot_Modified.png" />
+    <option name="AFTER_PATH" />
+    <option name="SHELVED_PATH" />
+  </binary>
+</changelist>

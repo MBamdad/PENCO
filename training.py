@@ -503,43 +503,6 @@ def train_hybrid(model, myloss, epochs, batch_size, train_loader, test_loader,
     return model, train_mse_hybrid_log, train_l2_hybrid_log, test_data_log, test_pde_loss_scaled_log, train_data_log, train_pde_scaled_log, test_loss_hybrid_log
 
 
-def compute_initial_loss_scaler(model, loader, myloss, normalized, normalizer, device, grid_info, epsilon, problem):
-    """
-    Computes the scaling factor to balance data and PDE losses.
-    """
-    model.eval()
-
-    # Get one batch from the loader
-    x, y = next(iter(loader))
-    x, y = x.to(device), y.to(device)
-
-    with torch.no_grad():
-        out = model(x)
-        if normalized:
-            y_normalizer = normalizer[1].to(device)
-            out = y_normalizer.decode(out)
-            y = y_normalizer.decode(y)
-
-        # Calculate initial data loss
-        initial_loss_data = myloss(out.flatten(start_dim=1), y.flatten(start_dim=1))
-
-        # Calculate initial raw PDE loss
-        initial_loss_pde_raw = calculate_pde_residual(out, grid_info, epsilon, problem, device)
-
-        # Handle case where PDE loss is zero to avoid division by zero
-        if initial_loss_pde_raw.item() < 1e-12:
-            scaler = 1.0
-            print("Warning: Initial PDE loss is near zero. Setting scaler to 1.0.")
-        else:
-            # The scaler is the ratio of the two losses
-            scaler = initial_loss_data.item() / initial_loss_pde_raw.item()
-            print(f"Computed initial loss scaler: {scaler:.4f}")
-            print(f"  - Initial Data Loss: {initial_loss_data.item():.6f}")
-            print(f"  - Initial PDE Loss (raw): {initial_loss_pde_raw.item():.6f}")
-
-    model.train()  # Set model back to training mode
-    return scaler
-
 
 ''''
 def train_hybrid(model, myloss, epochs, batch_size, train_loader, test_loader,
@@ -718,3 +681,84 @@ def train_hybrid(model, myloss, epochs, batch_size, train_loader, test_loader,
 
     return model, train_mse_hybrid_log, train_l2_hybrid_log, test_data_log, test_pde_loss_scaled_log, train_data_log, train_pde_scaled_log, test_loss_hybrid_log
 '''
+
+
+
+def train_fno4d(model, myloss, epochs, batch_size, train_loader, test_loader,
+                optimizer, scheduler, normalized, normalizer, device):
+    """Training function for FNO4d model."""
+    ntrain = len(train_loader) * train_loader.batch_size
+    ntest = len(test_loader) * test_loader.batch_size
+
+    train_mse_log = []
+    train_l2_log = []
+    test_l2_log = []
+    test_mse_log = []
+
+    if normalized:
+        y_normalizer = normalizer[1].to(device)
+    else:
+        y_normalizer = None
+
+    for ep in range(epochs):
+        model.train()
+        t1 = default_timer()
+        train_mse = 0
+        train_l2 = 0
+
+        for x, y in train_loader:
+            x, y = x.to(device), y.to(device)
+
+            optimizer.zero_grad()
+            out = model(x)
+
+            if normalized:
+                out = y_normalizer.decode(out)
+                y = y_normalizer.decode(y)
+
+            mse = F.mse_loss(out.flatten(start_dim=1), y.flatten(start_dim=1), reduction='mean')
+            loss = myloss(out.flatten(start_dim=1), y.flatten(start_dim=1))
+
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
+
+            train_mse += mse.item()
+            #train_l2 += loss.item()
+            train_l2 += loss.item() / batch_size  # Normalize by batch size
+
+        model.eval()
+        test_l2 = 0
+        test_mse = 0
+        with torch.no_grad():
+            for x, y in test_loader:
+                x, y = x.to(device), y.to(device)
+
+                out = model(x)
+                if normalized:
+                    out = y_normalizer.decode(out)
+                    y = y_normalizer.decode(y)
+
+                test_mse += F.mse_loss(out.flatten(start_dim=1), y.flatten(start_dim=1), reduction='mean').item()
+                test_l2 += myloss(out.flatten(start_dim=1), y.flatten(start_dim=1)).item()
+                test_l2 += test_l2.item() / batch_size
+
+
+        train_mse /= len(train_loader)
+        train_l2 /= len(train_loader)
+        test_mse /= len(test_loader)
+        test_l2 /= len(test_loader)
+
+        train_mse_log.append(train_mse)
+        train_l2_log.append(train_l2)
+        test_l2_log.append(test_l2)
+        test_mse_log.append(test_mse)
+
+        t2 = default_timer()
+
+        if ep == 0:
+            print("No. Epoch   Time (s)       Train MSE      Train L2            Test L2")
+
+        print(f"{ep:<10} {t2 - t1:<13.6f} {train_mse:<13.10f} {train_l2:<13.10f}  {test_l2:<13.10f}")
+
+    return model, train_mse_log, train_l2_log, test_l2_log
