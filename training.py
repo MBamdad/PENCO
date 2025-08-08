@@ -228,7 +228,7 @@ def calculate_pde_residual(u_phys, grid_info, epsilon, problem, device):
         lap_u_hat = -k2_m.unsqueeze(0).unsqueeze(-1) * u_hat
         lap_u = torch.fft.ifftn(lap_u_hat, dim=[1, 2, 3]).real
         f_prime_u = u_phys**3 - u_phys
-        rhs_ac3d = Cahn_ac * lap_u - f_prime_u
+        rhs_ac3d = lap_u - (1/Cahn_ac) * f_prime_u
         pde_residual = du_dt - rhs_ac3d
 
     elif problem == 'CH3D':
@@ -237,7 +237,7 @@ def calculate_pde_residual(u_phys, grid_info, epsilon, problem, device):
         lap_u_hat = -k2_m.unsqueeze(0).unsqueeze(-1) * u_hat
         lap_u = torch.fft.ifftn(lap_u_hat, dim=[1, 2, 3]).real
         #mu_terms = (u_phys**3 - 3 * u_phys) - Cahn_ch * lap_u
-        mu_terms = (u_phys ** 3 -  u_phys) - Cahn_ch * lap_u
+        mu_terms = (u_phys ** 3 - 3 * u_phys) - Cahn_ch * lap_u
         mu_terms_hat = torch.fft.fftn(mu_terms, dim=[1, 2, 3])
         lap_mu_terms_hat = -k2_m.unsqueeze(0).unsqueeze(-1) * mu_terms_hat
         lap_mu_terms = torch.fft.ifftn(lap_mu_terms_hat, dim=[1, 2, 3]).real
@@ -269,7 +269,7 @@ def calculate_pde_residual(u_phys, grid_info, epsilon, problem, device):
         k4_m = k2_m**2
         biharm_u_hat = k4_m.unsqueeze(0).unsqueeze(-1) * u_hat
         biharm_u = torch.fft.ifftn(biharm_u_hat, dim=[1, 2, 3]).real
-        rhs_mbe3d = -lap_u + epsilon_mbe * biharm_u - div_term
+        rhs_mbe3d = -lap_u - epsilon_mbe * biharm_u - div_term
         pde_residual = du_dt - rhs_mbe3d
 
     elif problem == 'PFC3D':
@@ -328,7 +328,7 @@ def calculate_pde_residual(u_phys, grid_info, epsilon, problem, device):
 
         # According to the derived form: ∂u/∂t = -(1-ε)∇²u - 2∇⁴u - ∇⁶u - ∇²(u³)
         # residual = du_dt - (-(1-epsilon_pfc)*lap_u - 2*biharm_u - triharm_u - lap_u_cubed)
-        rhs_pfc3d = -(1 - epsilon_pfc) * lap_u - 2 * biharm_u - triharm_u - lap_u_cubed
+        rhs_pfc3d = (1 - epsilon_pfc) * lap_u + 2 * biharm_u + triharm_u + lap_u_cubed
         pde_residual = du_dt - rhs_pfc3d
 
     else:
