@@ -703,8 +703,8 @@ def train_fno4d(model, myloss, epochs, batch_size, train_loader, test_loader,
     for ep in range(epochs):
         model.train()
         t1 = default_timer()
-        train_mse = 0
-        train_l2 = 0
+        train_mse = 0.0
+        train_l2 = 0.0
 
         for x, y in train_loader:
             x, y = x.to(device), y.to(device)
@@ -728,8 +728,8 @@ def train_fno4d(model, myloss, epochs, batch_size, train_loader, test_loader,
             train_l2 += loss.item() / batch_size  # Normalize by batch size
 
         model.eval()
-        test_l2 = 0
-        test_mse = 0
+        test_l2 = 0.0
+        test_mse = 0.0
         with torch.no_grad():
             for x, y in test_loader:
                 x, y = x.to(device), y.to(device)
@@ -740,8 +740,9 @@ def train_fno4d(model, myloss, epochs, batch_size, train_loader, test_loader,
                     y = y_normalizer.decode(y)
 
                 test_mse += F.mse_loss(out.flatten(start_dim=1), y.flatten(start_dim=1), reduction='mean').item()
-                test_l2 += myloss(out.flatten(start_dim=1), y.flatten(start_dim=1)).item()
-                test_l2 += test_l2.item() / batch_size
+                test_l2 += myloss(out.flatten(start_dim=1), y.flatten(start_dim=1)).item()/ batch_size
+                #test_l2 = myloss(out.flatten(start_dim=1), y.flatten(start_dim=1))
+                #test_l2 += test_l2.item() / batch_size
 
 
         train_mse /= len(train_loader)

@@ -40,10 +40,10 @@ problem = 'SH3D'
 # network_name = 'TNO2d'
 # network_name = 'FNO2d'
 #network_name = 'FNO3d'
-#network_name = 'FNO4d'
-network_name = 'TNO3d'
+network_name = 'FNO4d'
+#network_name = 'TNO3d'
 
-PINN_MODE =  False #True #   True #  False #  True #   True #    True #
+PINN_MODE =   False # True #  True #  False #  True #   True #    True #
 #  False #    True # False #  False  # False #
 
 print(f"problem = {problem}")
@@ -53,7 +53,7 @@ cf = importlib.import_module(f"configs.config_{problem}_{network_name}")
 network = getattr(importlib.import_module('networks'), network_name)
 torch.manual_seed(cf.torch_seed)
 np.random.seed(cf.numpy_seed)
-device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
 print("Device: ", device)
 
 PDE_WEIGHT = cf.pde_weight
@@ -335,6 +335,7 @@ if cf.training:
             'test_l2_log': test_l2_log
         }, model_path)
 '''
+
 
 end_time = time.time()
 Final_time = round(end_time - start_time, 2)
