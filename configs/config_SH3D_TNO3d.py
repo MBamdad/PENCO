@@ -7,7 +7,7 @@ numpy_seed = 0
 
 # Network Parameters
 nTrain = 1300 # 5250 # 7500
-nTest = 300 # 2250 #500
+nTest = 200 # 2250 #500
 batch_size = 20 # 50
 learning_rate = 0.001 # 0.005 # 0.001
 weight_decay = 1e-4 # 1e-4
@@ -68,5 +68,5 @@ pde_weight = 0.5 # Example: 70% physics loss
 # Learning Rate Scheduler Parameters (for StepLR)
 scheduler_step = 20  # Decay learning rate every 20 epochs
 scheduler_gamma = 0.5 # Multiply learning rate by 0.5 each time
-pde_loss_scaler = 1e1
+pde_loss_scaler = 1e0
 

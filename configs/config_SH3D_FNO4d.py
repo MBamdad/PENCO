@@ -35,35 +35,24 @@ load_model = False # True # False # False #True
 
 # Database
 parent_dir = './data/'
+matlab_dataset = 'SH3D_grf3d_ff_2000_Nt_101_Nx_32.mat' #
 
-#matlab_dataset = 'SH3D_1500_Nt_101_Nx_3232.mat' # correct
-#matlab_dataset = 'SH3D_1500_Nt_101_Nx_32.mat'
-matlab_dataset = 'SH3D_grf3d_1500_Nt_101_Nx_32.mat' # Correct code # TNO3d_SH3D_S32_T1to100_width12_modes14_q12_h6_grf3d.pt_results
+
 # Plotting
 
 # In configs/config_SH3D_TNO3d.py (Add these or ensure they exist)
-Lx = 10 # np.pi # 1.0 # Domain size (assuming Lx=Ly=Lz based on MATLAB)
+Lx = 15 # np.pi # 1.0 # Domain size (assuming Lx=Ly=Lz based on MATLAB)
 Ly =Lx
 Lz= Lx
 
 
 index = 62  # 24 # 62
-#domain = [-np.pi, np.pi] ######
 domain = [-Lx/2, Lx/2]
-
-# time_steps = [29, 35, 39, 45, 49]
 # time_steps = [0, 9, 19, 29, 39, 49, 59, 69, 79, 89, 99]
-#time_steps = [0, 4, 9, 14, 19, 24, 29, 34, 39, 44, 49,
-#              54, 59, 64, 69, 74, 79, 84, 89, 94, 99]
-#time_steps = [39, 49, 59, 69, 79, 89, 99]
-#time_steps = [39, 59, 79]
-#time_steps = [0, 9, 19]
 time_steps = [0, 50, 90]
+
 ####
 ### Hybrid method
-
-
-#domain = [-Lx/2, Lx/2] # Assuming centered domain
 
 # Time Discretization (from MATLAB)
 dt_sim = 0.05 # Simulation time step
