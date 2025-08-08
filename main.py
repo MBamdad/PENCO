@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import torch.nn.functional as F
 from training import train_fno, train_fno_time, train_hybrid, train_fno4d
 from torch.utils.data import DataLoader, random_split
-from utilities import ImportDataset, count_params, LpLoss, ModelEvaluator, SobolevLoss
+from utilities import ImportDataset, count_params, LpLoss, ModelEvaluator #, SobolevLoss
 from post_processing import plot_loss_trend, plot_combined_results_3d, plot_combined_results, plot_field_trajectory, \
     make_video, save_vtk, plot_xy_plane_subplots
 import time
@@ -40,8 +40,8 @@ problem = 'SH3D'
 # network_name = 'TNO2d'
 # network_name = 'FNO2d'
 #network_name = 'FNO3d'
-network_name = 'FNO4d'
-#network_name = 'TNO3d'
+#network_name = 'FNO4d'
+network_name = 'TNO3d'
 
 PINN_MODE =  False #True #   True #  False #  True #   True #    True #
 #  False #    True # False #  False  # False #
@@ -169,7 +169,7 @@ else:
 # Define optimizer, scheduler, and loss function
 optimizer = torch.optim.Adam(model.parameters(), lr=cf.learning_rate, weight_decay=cf.weight_decay)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cf.iterations)
-myloss = LpLoss(p=2, l1_weight=0.1, size_average=False) # size_average=True # False
+myloss = LpLoss(p=2, l1_weight=0.0, size_average=False) # size_average=True # False
 # NEW: Instantiate SobolevLoss instead of LpLoss
 # You can tune grad_weight. A good starting point is 0.1 or 1.0.
 #myloss = SobolevLoss(d=3, p=2, grad_weight=0.1)
@@ -223,7 +223,7 @@ if cf.training:
         elif network_name == 'FNO4d':
 
             model, train_mse_log, train_l2_log, test_l2_log = (  # Add val logs
-                train_fno(model, myloss, cf.epochs, cf.batch_size, train_loader, test_loader,
+                train_fno4d(model, myloss, cf.epochs, cf.batch_size, train_loader, test_loader,
                           optimizer, scheduler, cf.normalized, normalizers, device))
 
             # train_fno4d = train_fno
