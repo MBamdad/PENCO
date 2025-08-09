@@ -361,7 +361,7 @@ else:
 base_filename = f'{problem}_python_predictions_{initial_condition_type}{suffix}.mat'
 
 # Define the output directory and create it if it doesn't exist.
-output_dir = 'In_distribution'
+output_dir = 'OOD_MatFiles'
 os.makedirs(output_dir, exist_ok=True)
 
 # Combine directory and filename for the full save path.
