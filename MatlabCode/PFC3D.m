@@ -42,7 +42,7 @@ num_saved_steps = 101;
 ns = Nt / (num_saved_steps - 1);
 
 % Dataset
-data_size = 1500; %4440;
+data_size = 1500;
 binary_filename = "PFC3D_Augmented_" + num2str(data_size) + "_Nt_" + num2str(num_saved_steps) + ...
                   "_Nx_" + num2str(Nx) + ".bin";
 mat_filename = "PFC3D_Augmented_" + num2str(data_size) + "_Nt_" + num2str(num_saved_steps) + ...
@@ -73,54 +73,54 @@ for data_num = 1:data_size
     % Strategy: 80% random GRF, 20% star-shaped initial condition
     if rand() <= 0.2  % 20% chance to generate a star
         %disp("   -> Generating a random STAR");
-        
+
         % Define random parameters for the star
         interface_width = sqrt(2.0) * epsilon;
-        
+
         % Randomize the number of star points (between 4 and 8)
         num_points = randi([4, 8]);
-        
+
         % Randomize the amplitude of star points (between 0.5 and 2.0)
         amplitude = 0.5 + 1.5 * rand();
-        
+
         % Randomize the star size (major radius between 3 and 6)
         R_base = 3 + 3 * rand();
-        
+
         % Create star shape
         theta = atan2(zz, xx);
-        R_theta = R_base + amplitude * cos(num_points * theta); 
+        R_theta = R_base + amplitude * cos(num_points * theta);
         dist = sqrt(xx.^2 + 2*yy.^2 + zz.^2);  % Slightly elliptical in y-direction
-        
+
         % Randomize the interface width slightly
         effective_interface = interface_width * (0.8 + 0.4 * rand());
-        
+
         u = tanh((R_theta - dist) / effective_interface);
-        
+
         % Randomly flip some stars inside-out
         if rand() > 0.5
             u = -u;
         end
-        
+
     else % 80% chance to generate a GRF
         %disp("   -> Generating a random GRF");
-        
+
         % Define the min/max for the random ranges
         tau_min = 290;
         tau_max = 315;
         alpha_min = 95;
         alpha_max = 120;
-        
+
         % Generate random parameters
         current_tau = tau_min + (tau_max - tau_min) * rand();
         current_alpha = alpha_min + (alpha_max - alpha_min) * rand();
 
         % Generate the continuous random field
         norm_a = GRF3D(current_alpha, current_tau, Nx);
-        
+
         % Randomize the thresholding shift
         shift_factor = 0.7 - 0.4 * rand(); % Range: [0.7, 1.2]
         norm_a = norm_a - shift_factor * std(norm_a(:));
-        
+
         % Threshold the field
         u = ones(Nx,Ny,Nz);
         u(norm_a < 0) = -1;
@@ -145,7 +145,7 @@ for data_num = 1:data_size
             all_iterations(save_idx, :, :, :) = u;
             save_idx = save_idx + 1;
         end
-        
+
         %% Visualization (Plot Section)
         if FigDraw && mod(iter, ns) == 0
             clf;
@@ -159,14 +159,14 @@ for data_num = 1:data_size
             view(45, 45); % Consistent viewing angle
             pause(0.01); % Adjust for rendering speed
         end
-        
+
         %% Update u
         u = real(u);
         s_hat = fftn(u/dt) - (pp2 + qq2 + rr2) .* fftn(u.^3) + 2 * (pp2 + qq2 + rr2).^2 .* fftn(u);
         v_hat = s_hat ./ (1.0/dt + (1 - epsilon) * (pp2 + qq2 + rr2) + (pp2 + qq2 + rr2).^3);
         u = ifftn(v_hat);
     end
-    
+
     fwrite(fileID, all_iterations, 'single');
     %toc;
 end
