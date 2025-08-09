@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import importlib
+import os
 from utilities import ImportDataset
 import matplotlib
 matplotlib.use('TkAgg')
@@ -12,11 +13,30 @@ from matplotlib.colors import LightSource
 from scipy.io import savemat
 
 # ============================================================================
-# 1. CHOOSE INITIAL CONDITION
+# 1. CHOOSE CASE STUDY AND MODEL APPROACH
 # ============================================================================
-# Options: 'sphere', 'dumbbell', 'star', separation, torus
-initial_condition_type = 'torus' # <-- CHANGE THIS VALUE TO RUN A DIFFERENT SIMULATION
-print(f"Running simulation for Initial Condition: {initial_condition_type.upper()}")
+case_study = 'SH3D'    # Options: 'SH3D', 'AC3D', 'CH3D', 'MBE3D', 'PFC3D'
+approach = 'hybrid'  # Options: 'standard', 'hybrid'  <-- YOUR NEW CHOICE
+
+# Validate the approach choice
+if approach not in ['standard', 'hybrid']:
+    raise ValueError(f"Unknown approach: '{approach}'. Please choose 'standard' or 'hybrid'.")
+
+# Determine initial_condition_type based on the case_study
+if case_study in ['SH3D', 'AC3D']:
+    initial_condition_type = 'sphere'
+elif case_study in ['CH3D', 'PFC3D']:
+    initial_condition_type = 'star'
+elif case_study == 'MBE3D':
+    initial_condition_type = 'torus'
+else:
+    # A default or an error for unhandled cases
+    raise ValueError(f"Unknown case_study: {case_study}. Please choose from 'SH3D', 'AC3D', 'CH3D', 'MBE3D', 'PFC3D'.")
+
+print(f"Running Case Study: {case_study.upper()}")
+print(f"Selected Model Approach: {approach.upper()}")
+print(f"Selected Initial Condition: {initial_condition_type.upper()}")
+
 
 # ============================================================================
 # 2. MODEL AND DATASET LOADING
@@ -24,30 +44,34 @@ print(f"Running simulation for Initial Condition: {initial_condition_type.upper(
 # Load model
 device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
 
-# AC3D
-#model_path = '/scratch/noqu8762/phase_field_equations_4d/AC3D/models/TNO3d_AC3D_Hybrid_S32_T1to100_width12_modes14_q12_h6_grf3d.pt' # AC3D
-#model_path = '/scratch/noqu8762/phase_field_equations_4d/AC3D/models/TNO3d_AC3D_S32_T1to100_width12_modes14_q12_h6_grf3d.pt' # AC3D
+# Define model paths for each case study
+model_paths = {
+    'AC3D': {
+        'standard': '/scratch/noqu8762/phase_field_equations_4d/AC3D/models/TNO3d_AC3D_S32_T1to100_width12_modes14_q12_h6_grf3d.pt',
+        'hybrid': '/scratch/noqu8762/phase_field_equations_4d/AC3D/models/TNO3d_AC3D_Hybrid_S32_T1to100_width12_modes14_q12_h6_grf3d.pt'
+    },
+    'CH3D': {
+        'standard': '/scratch/noqu8762/phase_field_equations_4d/CH3D/models/TNO3d_CH3D_S32_T1to100_width12_modes14_q12_h6_grf3d.pt',
+        'hybrid': '/scratch/noqu8762/phase_field_equations_4d/CH3D/models/TNO3d_CH3D_Hybrid_S32_T1to100_width12_modes14_q12_h6_grf3d.pt'
+    },
+    'SH3D': {
+        'standard': '/scratch/noqu8762/phase_field_equations_4d/SH3D/models/TNO3d_SH3D_S32_T1to100_width12_modes14_q12_h6_grf3d.pt',
+        'hybrid': '/scratch/noqu8762/phase_field_equations_4d/SH3D/models/TNO3d_SH3D_Hybrid_S32_T1to100_width12_modes14_q12_h6_grf3d.pt'
+    },
+    'MBE3D': {
+        'standard': '/scratch/noqu8762/phase_field_equations_4d/MBE3D/models/TNO3d_MBE3D_S32_T1to100_width12_modes14_q12_h6_grf3d.pt',
+        'hybrid': '/scratch/noqu8762/phase_field_equations_4d/MBE3D/models/TNO3d_MBE3D_Hybrid_S32_T1to100_width12_modes14_q12_h6_grf3d.pt'
+    },
+    'PFC3D': {
+        'standard': '/scratch/noqu8762/phase_field_equations_4d/PFC3D/models/TNO3d_PFC3D_S32_T1to100_width12_modes14_q12_h6_grf3d.pt',
+        'hybrid': '/scratch/noqu8762/phase_field_equations_4d/PFC3D/models/TNO3d_PFC3D_Hybrid_S32_T1to100_width12_modes14_q12_h6_grf3d.pt'
+    }
+}
 
-# CH3D
-#model_path = '/scratch/noqu8762/phase_field_equations_4d/CH3D/models/TNO3d_CH3D_S32_T1to100_width12_modes14_q12_h6_grf3d.pt'
-#model_path = '/scratch/noqu8762/phase_field_equations_4d/CH3D/models/TNO3d_CH3D_Hybrid_S32_T1to100_width12_modes14_q12_h6_grf3d.pt'
+# Automatically select the model path based on the chosen case_study and approach
+model_path = model_paths[case_study][approach] # <-- CHANGED: Using 'approach' variable
+print(f"Loading model: {model_path}")
 
-# SH3D
-model_path = '/scratch/noqu8762/phase_field_equations_4d/SH3D/models/TNO3d_SH3D_S32_T1to100_width12_modes14_q12_h6_grf3d.pt'
-#model_path = '/scratch/noqu8762/phase_field_equations_4d/SH3D/models/TNO3d_SH3D_Hybrid_S32_T1to100_width12_modes14_q12_h6_grf3d.pt'
-
-
-#  MBE3d
-# model_path = '/scratch/noqu8762/phase_field_equations_4d/MBE3D/models/TNO3d_MBE3D_S32_T1to100_width12_modes14_q12_h6_grf3d.pt'
-#model_path = '/scratch/noqu8762/phase_field_equations_4d/MBE3D/models/TNO3d_MBE3D_Hybrid_S32_T1to100_width12_modes14_q12_h6_grf3d.pt'
-
-# PFC
-#model_path = '/scratch/noqu8762/phase_field_equations_4d/PFC3D/models/TNO3d_PFC3D_S32_T1to100_width12_modes14_q12_h6_grf3d.pt'
-#model_path = '/scratch/noqu8762/phase_field_equations_4d/PFC3D/models/TNO3d_PFC3D_Hybrid_S32_T1to100_width12_modes14_q12_h6_grf3d.pt'
-
-# PFC3D Mixed
-#model_path = '/scratch/noqu8762/phase_field_equations_4d/PFC3D/models/TNO3d_PFC3D_Mixed_S32_T1to100_width12_modes14_q12_h6_grf3d.pt'
-#model_path = '/scratch/noqu8762/phase_field_equations_4d/PFC3D/models/TNO3d_PFC3D_Mixed_Hybrid_S32_T1to100_width12_modes14_q12_h6_grf3d.pt'
 
 try:
     from networks import TNO3d # Assuming networks.py and TNO3d are available
@@ -69,16 +93,10 @@ model = checkpoint['model']
 model.eval()
 
 # Load dataset for normalization AND EXTRACT PROBLEM NAME
-key_directory = 'phase_field_equations_4d'
-problem = ''
-try:
-    parts = model_path.split('/')
-    index = parts.index(key_directory)
-    problem = parts[index + 1] # This gets the directory name (e.g., 'AC3D')
-except (ValueError, IndexError):
-    print(f"Could not automatically determine problem name. Set manually if needed.")
-
+# The 'problem' variable is now the same as 'case_study'
+problem = case_study
 print(f"Problem Name Determined: {problem}")
+
 network_name = 'TNO3d'
 cf = importlib.import_module(f"configs.config_{problem}_{network_name}") # Assuming configs module is available
 dataset = ImportDataset(cf.parent_dir, cf.matlab_dataset, cf.normalized, cf.T_in, cf.T_out)
@@ -93,138 +111,108 @@ dataset.normalizer_y.std = dataset.normalizer_y.std.to(device)
 # ============================================================================
 # 3. CREATE INITIAL CONDITION
 # ============================================================================
-def create_initial_condition(ic_type='sphere'):
+def create_initial_condition(ic_type, case_study):
 
-    Nx, Ny, Nz = 0, 0, 0
-    Lx, Ly, Lz = 0, 0, 0
-    epsilon = 0
-    Nt = 0
-    selected_frames = []
+    Nx, Ny, Nz = 32, 32, 32
+    Nt = 100
     u = None
-    dt = 0
 
     if ic_type == 'sphere':
-        Nx = 32; Ny = 32; Nz = 32
-        #Lx = 10*np.pi; # PFC3D
-        #Lx = 5 # AC3D
-        Lx = 15  # SH3D
-        Ly = Lx; Lz = Lx
-        #epsilon = 0.5 # PFC3D
-        epsilon = 0.15 # SH3d
-        # dt = 0.0005
-        dt = 0.05 # SH3D
-        Nt = 100
-        selected_frames = [0, 70, 90]
+        if case_study == 'AC3D':
+            Lx = 5
+            epsilon = 0.1
+            dt = 0.005
+            selected_frames = [0, 50, 90]
+            radius = 0.5
+        elif case_study == 'SH3D':
+            Lx = 15
+            epsilon = 0.15
+            dt = 0.05
+            selected_frames = [0, 70, 90]
+            radius = 2.0
+        else:
+            raise ValueError(f"Sphere IC is not configured for case study: {case_study}")
 
+        Ly, Lz = Lx, Lx
         x_grid = np.linspace(-Lx / 2, Lx / 2, Nx)
         y_grid = np.linspace(-Ly / 2, Ly / 2, Ny)
         z_grid = np.linspace(-Lz / 2, Lz / 2, Nz)
         xx, yy, zz = np.meshgrid(x_grid, y_grid, z_grid, indexing='ij')
-
-        #radius = 6 # PFC3D
-        #radius = 0.5 # AC3D
-        radius = 2.0  # SH3D
         interface_width = np.sqrt(2) * epsilon
         u = np.tanh((radius - np.sqrt(xx ** 2 + yy ** 2 + zz ** 2)) / interface_width)
 
-    elif ic_type == 'dumbbell':
-        Nx = 32; Ny = 32; Nz = 32
-        Lx = 40; Ly = 20; Lz = 20
-        epsilon = 0.005
-        dt = 0.01
-        Nt = 100
-        selected_frames = [0, 50, 90]
-
-        x_grid = np.linspace(0, Lx, Nx)
-        y_grid = np.linspace(0, Ly, Ny)
-        z_grid = np.linspace(0, Lz, Nz)
-        xx, yy, zz = np.meshgrid(x_grid, y_grid, z_grid, indexing='ij')
-
-        R0 = 0.25
-        interface_width = np.sqrt(2) * epsilon
-
-        r1 = np.sqrt((xx - (0.3 * Lx)) ** 2 + (yy - (0.5 * Ly)) ** 2 + (zz - (0.5 * Lz)) ** 2)
-        r2 = np.sqrt((xx - (1.7 * Lx)) ** 2 + (yy - (0.5 * Ly)) ** 2 + (zz - (0.5 * Lz)) ** 2)
-        u_spheres = np.tanh((R0 - r1) / interface_width) + np.tanh((R0 - r2) / interface_width) + 1
-
-        bar_mask = (xx > (0.4 * Lx)) & (xx < (1.6 * Lx)) & \
-                   (yy > (0.4 * Ly)) & (yy < (0.6 * Ly)) & \
-                   (zz > (0.4 * Lz)) & (zz < (0.6 * Lz))
-        u = u_spheres
-        u[bar_mask] = 1.0
-        u = np.clip(u, -1.0, 1.0)
-
     elif ic_type == 'star':
-        Nx = 32; Ny = 32; Nz = 32
-        #Lx = 5 # AC3D,
-        #Lx = 10 * np.pi --> PFC3D
-        Lx = 2  # CH3D
-        Ly = Lx; Lz = Lx
-        #epsilon = 0.5 # PFC3D
-        epsilon = 0.05 # AC3D
-        dt = 0.005
-        Nt = 100
         selected_frames = [0, 50, 90]
+        dt = 0.005
+        if case_study == 'AC3D' or case_study == 'CH3D': # Assuming CH3D uses similar parameters to AC3D
+            Lx = 2 if case_study == 'CH3D' else 5 # Use Lx=5 for AC3D, Lx=2 for CH3D
+            epsilon = 0.05
+            R_theta_func = lambda theta: 0.7 + 0.2 * np.cos(6 * theta)
+        elif case_study == 'PFC3D':
+            Lx = 10 * np.pi
+            epsilon = 0.5
+            R_theta_func = lambda theta: 5.0 + 1.0 * np.cos(6 * theta)
+        else:
+            raise ValueError(f"Star IC is not configured for case study: {case_study}")
 
+        Ly, Lz = Lx, Lx
         x_grid = np.linspace(-Lx / 2, Lx / 2, Nx)
         y_grid = np.linspace(-Ly / 2, Ly / 2, Ny)
         z_grid = np.linspace(-Lz / 2, Lz / 2, Nz)
         xx, yy, zz = np.meshgrid(x_grid, y_grid, z_grid, indexing='ij')
-
         interface_width = np.sqrt(2.0) * epsilon
         theta = np.arctan2(zz, xx)
-        #R_theta = 5.0 + 1.0 * np.cos(6 * theta) # PFC3D
-        R_theta = 0.7 + 0.2 * np.cos(6 * theta)  # AC3D
+        R_theta = R_theta_func(theta)
         dist = np.sqrt(xx ** 2 + 2 * yy ** 2 + zz ** 2)
         u = np.tanh((R_theta - dist) / interface_width)
 
     elif ic_type == 'torus':
-        Nx = 32; Ny = 32; Nz = 32
-        #Lx = 10*np.pi;
-        Lx = 2*np.pi # MBE3D
-        Ly = Lx; Lz = Lx
-        #epsilon = 0.5
-        epsilon = 0.1 # MBE3D
-        #dt = 0.005
-        dt = 0.001 # MBE3D
-        Nt = 100
-        selected_frames = [0, 50, 90]
+        if case_study == 'MBE3D':
+            Lx = 2 * np.pi
+            epsilon = 0.1
+            dt = 0.001
+            selected_frames = [0, 50, 90]
+            R_major, r_minor = 2.1, 0.7
+        else:
+            raise ValueError(f"Torus IC is not configured for case study: {case_study}")
 
+        Ly, Lz = Lx, Lx
         x_grid = np.linspace(-Lx / 2, Lx / 2, Nx)
         y_grid = np.linspace(-Ly / 2, Ly / 2, Ny)
         z_grid = np.linspace(-Lz / 2, Lz / 2, Nz)
         xx, yy, zz = np.meshgrid(x_grid, y_grid, z_grid, indexing='ij')
-
-        #R_major = 5.5
-        #r_minor = 3.5
-        R_major = 2.1 # MBE3D
-        r_minor = 0.7 # MBE3D
-
         interface_width = np.sqrt(2) * epsilon
         torus_dist = np.sqrt((np.sqrt(xx ** 2 + yy ** 2) - R_major) ** 2 + zz ** 2)
         u = np.tanh((r_minor - torus_dist) / interface_width)
-        #u = np.clip(u, -1.0, 1.0)
+
+    # Keep other initial conditions for completeness, though they are not triggered by the new logic
+    elif ic_type == 'dumbbell':
+        Lx, Ly, Lz = 40, 20, 20
+        epsilon = 0.005
+        dt = 0.01
+        selected_frames = [0, 50, 90]
+        x_grid, y_grid, z_grid = np.linspace(0, Lx, Nx), np.linspace(0, Ly, Ny), np.linspace(0, Lz, Nz)
+        xx, yy, zz = np.meshgrid(x_grid, y_grid, z_grid, indexing='ij')
+        R0, interface_width = 0.25, np.sqrt(2) * epsilon
+        r1 = np.sqrt((xx - (0.3 * Lx)) ** 2 + (yy - (0.5 * Ly)) ** 2 + (zz - (0.5 * Lz)) ** 2)
+        r2 = np.sqrt((xx - (1.7 * Lx)) ** 2 + (yy - (0.5 * Ly)) ** 2 + (zz - (0.5 * Lz)) ** 2)
+        u_spheres = np.tanh((R0 - r1) / interface_width) + np.tanh((R0 - r2) / interface_width) + 1
+        bar_mask = (xx > (0.4 * Lx)) & (xx < (1.6 * Lx)) & \
+                   (yy > (0.4 * Ly)) & (yy < (0.6 * Ly)) & \
+                   (zz > (0.4 * Lz)) & (zz < (0.6 * Lz))
+        u = u_spheres; u[bar_mask] = 1.0; u = np.clip(u, -1.0, 1.0)
 
     elif ic_type == 'separation':
-        Nx = 32; Ny = 32; Nz = 32
-        Lx = 2 * np.pi; Ly = 2 * np.pi; Lz = 2 * np.pi
+        Lx, Ly, Lz = 2 * np.pi, 2 * np.pi, 2 * np.pi
         epsilon = 0.5
         dt = 0.0005
-        Nt = 100
         selected_frames = [0, 50, 90]
-
-        x_grid = np.linspace(-Lx/2, Lx/2, Nx)
-        y_grid = np.linspace(-Ly/2, Ly/2, Ny)
-        z_grid = np.linspace(-Lz/2, Lz/2, Nz)
+        x_grid, y_grid, z_grid = np.linspace(-Lx/2, Lx/2, Nx), np.linspace(-Ly/2, Ly/2, Ny), np.linspace(-Lz/2, Lz/2, Nz)
         xx, yy, zz = np.meshgrid(x_grid, y_grid, z_grid, indexing='ij')
-
         interface_width = np.sqrt(2) * epsilon
-
         r1_dist = np.sqrt((xx + 1)**2 + yy**2 + zz**2)
         r2_dist = np.sqrt((xx - 1)**2 + yy**2 + zz**2)
-
         u = np.tanh((1 - r1_dist) / interface_width) + np.tanh((1 - r2_dist) / interface_width)
-        #u = np.clip(u, -1.0, 1.0)
 
     else:
         raise ValueError(f"Unknown initial condition type: {ic_type}")
@@ -233,7 +221,7 @@ def create_initial_condition(ic_type='sphere'):
 
 # Create the selected initial condition
 initial_condition_field, domain_lengths, grid_sizes, Nt, dt, selected_frames = create_initial_condition(
-    ic_type=initial_condition_type)
+    ic_type=initial_condition_type, case_study=case_study)
 Lx, Ly, Lz = domain_lengths
 Nx, Ny, Nz = grid_sizes
 
@@ -258,27 +246,24 @@ with torch.no_grad():
     end_time.record()  # Stop recording
     torch.cuda.synchronize()  # Wait for all operations to complete
 
-    # ==================== MODIFICATION START ====================
     # Calculate elapsed time in milliseconds
     inference_time_ms = start_time.elapsed_time(end_time)
     # Convert milliseconds to seconds for saving
     inference_time = inference_time_ms / 1000.0
-    # ===================== MODIFICATION END =====================
 
     prediction = dataset.normalizer_y.decode(prediction)
     # Clip the prediction to be within the physical bounds [-1, 1].
     #prediction = torch.clamp(prediction, min=-1.0, max=1.0)
 
-# ==================== MODIFICATION START ====================
 # Updated print statement to show both units
 print(f"Inference time: {inference_time_ms:.3f} milliseconds ({inference_time:.6f} seconds)")
-# ===================== MODIFICATION END =====================
 
 
 # Create figure
 fig = plt.figure(figsize=(20, 10))
 grid = plt.GridSpec(2, len(selected_frames), hspace=0.3, wspace=0.2)
-fig.suptitle(f"TNO Prediction for {initial_condition_type.upper()} Initial Condition ({problem})", fontsize=16)
+# The title now also includes the approach
+fig.suptitle(f"TNO Prediction ({approach.capitalize()}) for {initial_condition_type.upper()} IC ({problem})", fontsize=16)
 
 # Define mesh coordinates for plotting
 if initial_condition_type in ['sphere', 'star', 'torus', 'separation']:
@@ -295,13 +280,6 @@ elif initial_condition_type == 'dumbbell':
 # 1. Plot 3D isosurfaces
 for i, t in enumerate(selected_frames):
     ax = fig.add_subplot(grid[0, i], projection='3d')
-
-    #if t == 0:
-    #    frame_data = initial_condition_field
-    #    title_text = f'Initial Condition\nTime = {t}'
-    #else:
-    #    frame_data = prediction[0, ..., t].cpu().numpy()
-    #    title_text = f'Prediction\nTime = {t}'
 
     frame_data = prediction[0, ..., t].cpu().numpy()
     title_text = f'Prediction\nTime = {t}'
@@ -349,8 +327,6 @@ for t in selected_frames:
     else:
         profile = prediction[0, :, center_y_idx, center_z_idx, t].cpu().numpy()
         label_text = f't={t}'
-    #profile = prediction[0, :, center_y_idx, center_z_idx, t].cpu().numpy()
-    #label_text = f't={t}'
 
     ax_profile.plot(x_coords, profile, label=label_text, alpha=0.8, linewidth=1.5)
 
@@ -375,17 +351,27 @@ prediction_np = prediction.cpu().numpy()
 # Create a "hybrid" tensor for saving, ensuring the t=0 slice is the true IC
 final_prediction_to_save = np.copy(prediction_np)
 final_prediction_to_save[0, :, :, :, 0] = initial_condition_field
-# Define the output filename using the 'problem' variable extracted earlier
-# from the model_path. This makes the filename dynamic.
-output_filename = f'{problem}_python_predictions_{initial_condition_type}.mat'
 
-# ==================== MODIFICATION START ====================
+# Define the output filename based on whether the model is a hybrid version.
+# Suffix is PI-MHNO for hybrid models, MHNO otherwise.
+if 'Hybrid' in model_path:
+    suffix = '_PI-MHNO'
+else:
+    suffix = '_MHNO'
+base_filename = f'{problem}_python_predictions_{initial_condition_type}{suffix}.mat'
+
+# Define the output directory and create it if it doesn't exist.
+output_dir = 'In_distribution'
+os.makedirs(output_dir, exist_ok=True)
+
+# Combine directory and filename for the full save path.
+output_filepath = os.path.join(output_dir, base_filename)
+
 # Save the corrected data and the inference time to the .mat file
-savemat(output_filename, {
+savemat(output_filepath, {
     'python_pred': final_prediction_to_save,
     'selected_frames': np.array(selected_frames),
     'x': x_coords,
     'inference_time': inference_time  # Add the inference time (in seconds)
 })
-print(f"Corrected prediction (with true IC at t=0) and inference time saved to {output_filename}")
-# ===================== MODIFICATION END =====================
+print(f"Corrected prediction (with true IC at t=0) and inference time saved to {output_filepath}")
