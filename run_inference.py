@@ -37,7 +37,6 @@ model_path = '/scratch/noqu8762/phase_field_equations_4d/SH3D/models/TNO3d_SH3D_
 #model_path = '/scratch/noqu8762/phase_field_equations_4d/SH3D/models/TNO3d_SH3D_Hybrid_S32_T1to100_width12_modes14_q12_h6_grf3d.pt'
 
 
-
 #  MBE3d
 # model_path = '/scratch/noqu8762/phase_field_equations_4d/MBE3D/models/TNO3d_MBE3D_S32_T1to100_width12_modes14_q12_h6_grf3d.pt'
 #model_path = '/scratch/noqu8762/phase_field_equations_4d/MBE3D/models/TNO3d_MBE3D_Hybrid_S32_T1to100_width12_modes14_q12_h6_grf3d.pt'
@@ -111,7 +110,7 @@ def create_initial_condition(ic_type='sphere'):
         Lx = 15  # SH3D
         Ly = Lx; Lz = Lx
         #epsilon = 0.5 # PFC3D
-        epsilon = 0.15
+        epsilon = 0.15 # SH3d
         # dt = 0.0005
         dt = 0.05 # SH3D
         Nt = 100
