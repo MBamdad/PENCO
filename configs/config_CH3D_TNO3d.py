@@ -21,7 +21,7 @@ n_layers = 2 # 4 # 5 # 5 # 8
 
 # Discretization
 
-s = 64 # 64 #32 # 64
+s = 32 # 64 #32 # 64
 T_in = 1
 T_out = 100 # 100
 
@@ -53,7 +53,7 @@ time_steps = [0, 50, 90]
 
 # Time Discretization (from MATLAB)
 dt_sim = 0.0005 # Simulation time step
-dt_simulation = 0.05
+dt_simulation = 0.0005
 Nt = 100 # Total simulation steps
 num_saved_steps = 101 # Number of saved steps (includes t=0)
 ns = Nt / (num_saved_steps - 1) # Interval between saved steps

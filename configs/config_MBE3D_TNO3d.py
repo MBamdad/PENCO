@@ -23,7 +23,7 @@ n_layers = 2
 # Discretization
 s = 32
 T_in = 1
-T_out = 20 # 100
+T_out = 100 # 100
 
 # Training Setting
 normalized = True
@@ -64,7 +64,7 @@ dt_model = ns * dt_sim # Effective time step between model outputs
 # PDE Parameters
 epsilon = 0.1
 #pde_weight = 0.3 # Example: 30% physics loss
-pde_weight = 0.4 # Example: 70% physics loss
+pde_weight = 0.5 # Example: 70% physics loss
 
 # Learning Rate Scheduler Parameters (for StepLR)
 scheduler_step = 20  # Decay learning rate every 20 epochs

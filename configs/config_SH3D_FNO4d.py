@@ -23,7 +23,7 @@ n_layers = 2 # 4
 # Discretization
 s = 32 # 80         # CRITICAL: Must match Nx, Ny, Nz from MATLAB (which is 80)
 T_in = 1       # CRITICAL: Use the first time step (t=0) as input
-T_out = 100 # 91 # 100 # 20
+T_out = 91 # 91 # 100 # 20
 
 # Training Setting
 normalized = True # False
