@@ -4,32 +4,24 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="69f06a2e-e075-4f1f-8925-28211e19f97d" name="Changes" comment="update and removed old files">
+    <list default="true" id="69f06a2e-e075-4f1f-8925-28211e19f97d" name="Changes" comment="updated">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SH3D/plots_TNO3d/CH3D_Comparison_star_SANO.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SH3D/plots_TNO3d/SH3D_Comparison_Plot_Modified.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SH3D/plots_TNO3d/SH3D_SANO_field_comparison.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SH3D/plots_TNO3d/SH3D_SANO_field_comparison_FINAL.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_AC2D_FNO2d.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_AC2D_FNO3d.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_AC2D_TNO2d.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_CH2DNL_FNO2d.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_CH2DNL_FNO3d.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_CH2DNL_TNO2d.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_CH2D_FNO2d.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_CH2D_FNO3d.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_CH2D_TNO2d.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_MBE2D_FNO2d.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_MBE2D_FNO3d.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_MBE2D_TNO2d.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_PFC2D_FNO2d.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_PFC2D_FNO3d.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_PFC2D_TNO2d.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_SH2D_FNO2d.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_SH2D_FNO3d.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_SH2D_TNO2d.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/run_interface2.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/run_interface3.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/MatlabCode/3D_phase_evolution.m" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/MatlabCode/AC3D.m" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/MatlabCode/Box_plot.m" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/MatlabCode/CH3D.m" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/MatlabCode/GRF.m" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/MatlabCode/GRF3D.m" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/MatlabCode/GRFtest.m" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/MatlabCode/In_Distribution/3D_phase_evolution4GRF.m" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/MatlabCode/MBE3D.m" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/MatlabCode/MHNO_FNO_4d_Diagram.m" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/MatlabCode/Out_Distribution/OOD.m" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/MatlabCode/PFC3D.m" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/MatlabCode/SH3D.m" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/MatlabCode/middle.m" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/how fea1d8c:networks.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/main1.py" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -88,95 +80,96 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Python.AC2D.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.AC2D_2.executor&quot;: &quot;Run&quot;,
-    &quot;Python.AC2D_Net2D.executor&quot;: &quot;Run&quot;,
-    &quot;Python.AC2D_Net2D_1.executor&quot;: &quot;Run&quot;,
-    &quot;Python.AC2D_Net2D_2.executor&quot;: &quot;Run&quot;,
-    &quot;Python.AC2D_Net2D_3.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.AC3D.executor&quot;: &quot;Run&quot;,
-    &quot;Python.AC3D_FNO3d.executor&quot;: &quot;Run&quot;,
-    &quot;Python.AC3D_TNO3d.executor&quot;: &quot;Run&quot;,
-    &quot;Python.AC3d_FNO3d.executor&quot;: &quot;Run&quot;,
-    &quot;Python.AC3d_TNO3d_hybrid.executor&quot;: &quot;Run&quot;,
-    &quot;Python.CH2D.executor&quot;: &quot;Run&quot;,
-    &quot;Python.CH3D_2.executor&quot;: &quot;Run&quot;,
-    &quot;Python.CH3D_FNO3d.executor&quot;: &quot;Run&quot;,
-    &quot;Python.CH3D_TNO3d.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.MBE2D.executor&quot;: &quot;Run&quot;,
-    &quot;Python.MBE3D.executor&quot;: &quot;Run&quot;,
-    &quot;Python.MBE3D_New.executor&quot;: &quot;Run&quot;,
-    &quot;Python.MBE3D_TNO3d.executor&quot;: &quot;Run&quot;,
-    &quot;Python.PFC2D.executor&quot;: &quot;Run&quot;,
-    &quot;Python.PFC3D.executor&quot;: &quot;Run&quot;,
-    &quot;Python.PFC3D_TNO3d.executor&quot;: &quot;Run&quot;,
-    &quot;Python.PFV3D_FNO3d.executor&quot;: &quot;Run&quot;,
-    &quot;Python.RunScript0.executor&quot;: &quot;Run&quot;,
-    &quot;Python.RunScript1.executor&quot;: &quot;Run&quot;,
-    &quot;Python.RunScript2.executor&quot;: &quot;Run&quot;,
-    &quot;Python.RunScript3.executor&quot;: &quot;Run&quot;,
-    &quot;Python.SH2D.executor&quot;: &quot;Run&quot;,
-    &quot;Python.SH3D.executor&quot;: &quot;Run&quot;,
-    &quot;Python.SH3D_FNO3d.executor&quot;: &quot;Run&quot;,
-    &quot;Python.SH3D_FNO4d.executor&quot;: &quot;Run&quot;,
-    &quot;Python.SH3D_New.executor&quot;: &quot;Run&quot;,
-    &quot;Python.SH3D_TNO3d.executor&quot;: &quot;Run&quot;,
-    &quot;Python.SH3D_TNO3d_Hybrid.executor&quot;: &quot;Run&quot;,
-    &quot;Python.THFNO.executor&quot;: &quot;Run&quot;,
-    &quot;Python.Test.executor&quot;: &quot;Run&quot;,
-    &quot;Python.Test2.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.Test3.executor&quot;: &quot;Run&quot;,
-    &quot;Python.Test_Run.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.backend_interagg.executor&quot;: &quot;Run&quot;,
-    &quot;Python.config_AC2D.executor&quot;: &quot;Run&quot;,
-    &quot;Python.config_AC2D_FNO2d.executor&quot;: &quot;Run&quot;,
-    &quot;Python.config_AC2D_FNO3d.executor&quot;: &quot;Run&quot;,
-    &quot;Python.config_AC3D_TNO3d.executor&quot;: &quot;Run&quot;,
-    &quot;Python.config_CH2DNL_TNO2d.executor&quot;: &quot;Run&quot;,
-    &quot;Python.config_CH2D_TNO2d.executor&quot;: &quot;Run&quot;,
-    &quot;Python.config_CH3D_TNO3d.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.config_MBE2D_TNO2d.executor&quot;: &quot;Run&quot;,
-    &quot;Python.config_SH3D_TNO3d.executor&quot;: &quot;Run&quot;,
-    &quot;Python.fourier_3d.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.main.executor&quot;: &quot;Run&quot;,
-    &quot;Python.main_TF.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.networks.executor&quot;: &quot;Run&quot;,
-    &quot;Python.post_processing.executor&quot;: &quot;Run&quot;,
-    &quot;Python.run_inference.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test1.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/scratch/noqu8762/phase_field_equations_4d/data&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Python.AC2D.executor": "Debug",
+    "Python.AC2D_2.executor": "Run",
+    "Python.AC2D_Net2D.executor": "Run",
+    "Python.AC2D_Net2D_1.executor": "Run",
+    "Python.AC2D_Net2D_2.executor": "Run",
+    "Python.AC2D_Net2D_3.executor": "Debug",
+    "Python.AC3D.executor": "Run",
+    "Python.AC3D_FNO3d.executor": "Run",
+    "Python.AC3D_TNO3d.executor": "Run",
+    "Python.AC3d_FNO3d.executor": "Run",
+    "Python.AC3d_TNO3d_hybrid.executor": "Run",
+    "Python.CH2D.executor": "Run",
+    "Python.CH3D_2.executor": "Run",
+    "Python.CH3D_FNO3d.executor": "Run",
+    "Python.CH3D_TNO3d.executor": "Debug",
+    "Python.MBE2D.executor": "Run",
+    "Python.MBE3D.executor": "Run",
+    "Python.MBE3D_New.executor": "Run",
+    "Python.MBE3D_TNO3d.executor": "Run",
+    "Python.PFC2D.executor": "Run",
+    "Python.PFC3D.executor": "Run",
+    "Python.PFC3D_TNO3d.executor": "Run",
+    "Python.PFV3D_FNO3d.executor": "Run",
+    "Python.RunScript0.executor": "Run",
+    "Python.RunScript1.executor": "Run",
+    "Python.RunScript2.executor": "Run",
+    "Python.RunScript3.executor": "Run",
+    "Python.SH2D.executor": "Run",
+    "Python.SH3D.executor": "Run",
+    "Python.SH3D_FNO3d.executor": "Run",
+    "Python.SH3D_FNO4d.executor": "Run",
+    "Python.SH3D_New.executor": "Run",
+    "Python.SH3D_TNO3d.executor": "Run",
+    "Python.SH3D_TNO3d_Hybrid.executor": "Run",
+    "Python.THFNO.executor": "Run",
+    "Python.Test.executor": "Run",
+    "Python.Test2.executor": "Debug",
+    "Python.Test3.executor": "Run",
+    "Python.Test_Run.executor": "Debug",
+    "Python.backend_interagg.executor": "Run",
+    "Python.config_AC2D.executor": "Run",
+    "Python.config_AC2D_FNO2d.executor": "Run",
+    "Python.config_AC2D_FNO3d.executor": "Run",
+    "Python.config_AC3D_TNO3d.executor": "Run",
+    "Python.config_CH2DNL_TNO2d.executor": "Run",
+    "Python.config_CH2D_TNO2d.executor": "Run",
+    "Python.config_CH3D_TNO3d.executor": "Debug",
+    "Python.config_MBE2D_TNO2d.executor": "Run",
+    "Python.config_SH3D_TNO3d.executor": "Run",
+    "Python.fourier_3d.executor": "Debug",
+    "Python.main.executor": "Run",
+    "Python.main_TF.executor": "Debug",
+    "Python.networks.executor": "Run",
+    "Python.post_processing.executor": "Run",
+    "Python.run_inference.executor": "Run",
+    "Python.test1.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "git-widget-placeholder": "main",
+    "last_opened_file_path": "/scratch/noqu8762/phase_field_equations_4d/OOD_MatFiles/Old_version_MatFiles",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
+    "vue.rearranger.settings.migration": "true"
   },
-  &quot;keyToStringList&quot;: {
-    &quot;ChangesTree.GroupingKeys&quot;: [
-      &quot;directory&quot;
+  "keyToStringList": {
+    "ChangesTree.GroupingKeys": [
+      "directory"
     ]
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/OOD_MatFiles/Old_version_MatFiles" />
+      <recent name="$PROJECT_DIR$/In_distribution/Old_version_MatFiles" />
       <recent name="$PROJECT_DIR$/data" />
       <recent name="$PROJECT_DIR$/configs" />
       <recent name="$PROJECT_DIR$/AC2Dtest/models" />
-      <recent name="$PROJECT_DIR$/Archive_Code/AC2D" />
-      <recent name="$PROJECT_DIR$/Archive_Code" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/In_distribution/Old_version_MatFiles" />
       <recent name="$PROJECT_DIR$/data" />
       <recent name="$PROJECT_DIR$" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.SH3D_FNO4d">
+  <component name="RunManager" selected="Python.AC3D_TNO3d">
     <configuration name="AC3D_TNO3d" type="PythonConfigurationType" factoryName="Python">
       <module name="PhaseFieldNet" />
       <option name="ENV_FILES" value="" />
@@ -724,7 +717,55 @@
       <option name="project" value="LOCAL" />
       <updated>1754724636734</updated>
     </task>
-    <option name="localTasksCounter" value="27" />
+    <task id="LOCAL-00027" summary="update and removed old files">
+      <option name="closed" value="true" />
+      <created>1754725574689</created>
+      <option name="number" value="00027" />
+      <option name="presentableId" value="LOCAL-00027" />
+      <option name="project" value="LOCAL" />
+      <updated>1754725574689</updated>
+    </task>
+    <task id="LOCAL-00028" summary="update parameters">
+      <option name="closed" value="true" />
+      <created>1754726158599</created>
+      <option name="number" value="00028" />
+      <option name="presentableId" value="LOCAL-00028" />
+      <option name="project" value="LOCAL" />
+      <updated>1754726158599</updated>
+    </task>
+    <task id="LOCAL-00029" summary="update parameters">
+      <option name="closed" value="true" />
+      <created>1754726171694</created>
+      <option name="number" value="00029" />
+      <option name="presentableId" value="LOCAL-00029" />
+      <option name="project" value="LOCAL" />
+      <updated>1754726171694</updated>
+    </task>
+    <task id="LOCAL-00030" summary="organized">
+      <option name="closed" value="true" />
+      <created>1754730531314</created>
+      <option name="number" value="00030" />
+      <option name="presentableId" value="LOCAL-00030" />
+      <option name="project" value="LOCAL" />
+      <updated>1754730531314</updated>
+    </task>
+    <task id="LOCAL-00031" summary="updated .mat file path">
+      <option name="closed" value="true" />
+      <created>1754731679332</created>
+      <option name="number" value="00031" />
+      <option name="presentableId" value="LOCAL-00031" />
+      <option name="project" value="LOCAL" />
+      <updated>1754731679332</updated>
+    </task>
+    <task id="LOCAL-00032" summary="updated">
+      <option name="closed" value="true" />
+      <created>1754731696850</created>
+      <option name="number" value="00032" />
+      <option name="presentableId" value="LOCAL-00032" />
+      <option name="project" value="LOCAL" />
+      <updated>1754731696850</updated>
+    </task>
+    <option name="localTasksCounter" value="33" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -788,7 +829,11 @@
     <MESSAGE value="Update AC3D" />
     <MESSAGE value="Update FNO4d for SH3d" />
     <MESSAGE value="update and removed old files" />
-    <option name="LAST_COMMIT_MESSAGE" value="update and removed old files" />
+    <MESSAGE value="update parameters" />
+    <MESSAGE value="organized" />
+    <MESSAGE value="updated .mat file path" />
+    <MESSAGE value="updated" />
+    <option name="LAST_COMMIT_MESSAGE" value="updated" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -892,7 +937,7 @@
     <SUITE FILE_PATH="coverage/PhaseField1$SH3D_New.coverage" NAME="SH3D_New Coverage Results" MODIFIED="1740088478224" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
     <SUITE FILE_PATH="coverage/PhaseField1$PFC3D.coverage" NAME="PFC3D Coverage Results" MODIFIED="1740083613128" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
     <SUITE FILE_PATH="coverage/PhaseField_SANO3$SH3D_FNO3d.coverage" NAME="SH3D_FNO3d Coverage Results" MODIFIED="1741603428589" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
-    <SUITE FILE_PATH="coverage/phase_field_equations_4d$run_inference.coverage" NAME="run_inference Coverage Results" MODIFIED="1750323709039" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/phase_field_equations_4d$run_inference.coverage" NAME="run_inference Coverage Results" MODIFIED="1754726948323" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/PhaseField1$main.coverage" NAME="main Coverage Results" MODIFIED="1738663765959" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$post_processing.coverage" NAME="post_processing Coverage Results" MODIFIED="1733557098801" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$config_CH2D_TNO2d.coverage" NAME="config_CH2D_TNO2d Coverage Results" MODIFIED="1734086207850" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/configs" />
