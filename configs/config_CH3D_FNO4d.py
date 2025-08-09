@@ -23,7 +23,7 @@ n_layers = 2 # 4 # 5 # 5 # 8
 
 s = 32 # 64 #32 # 64
 T_in = 1
-T_out = 91 # 100
+T_out = 100 # 91
 
 # Training Setting
 normalized = True

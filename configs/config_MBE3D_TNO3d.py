@@ -7,9 +7,9 @@ torch_seed = 0
 numpy_seed = 0
 
 # Network Parameters
-nTrain = 1200 #1600 # 4000
-nTest = 300  # 400
-batch_size = 50# 25 #100
+nTrain = 1300 #1600 # 4000
+nTest = 200  # 400
+batch_size = 20# 25 #100
 learning_rate = 0.005
 weight_decay = 1e-4
 epochs = 30 # 50 # 1000

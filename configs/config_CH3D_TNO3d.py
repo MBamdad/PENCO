@@ -37,12 +37,10 @@ matlab_dataset = 'CH3D_1500_Nt_101_Nx_32.mat'
 
 
 # Plotting
-# In configs/config_SH3D_TNO3d.py (Add these or ensure they exist)
 Lx = 2 # np.pi # 1.0 # Domain size (assuming Lx=Ly=Lz based on MATLAB)
 Ly =Lx
 Lz= Lx
 index = 62  # 24 # 62
-#domain = [-np.pi, np.pi] ######
 domain = [-Lx/2, Lx/2]
 #time_steps = [0, 4, 9, 14, 19, 24, 29, 34, 39, 44, 49,
 #              54, 59, 64, 69, 74, 79, 84, 89, 94, 99]
