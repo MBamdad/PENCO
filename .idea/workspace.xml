@@ -4,10 +4,32 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="69f06a2e-e075-4f1f-8925-28211e19f97d" name="Changes" comment="update main">
+    <list default="true" id="69f06a2e-e075-4f1f-8925-28211e19f97d" name="Changes" comment="update and removed old files">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config_AC3D_TNO3d.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config_AC3D_TNO3d.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/training.py" beforeDir="false" afterPath="$PROJECT_DIR$/training.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SH3D/plots_TNO3d/CH3D_Comparison_star_SANO.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SH3D/plots_TNO3d/SH3D_Comparison_Plot_Modified.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SH3D/plots_TNO3d/SH3D_SANO_field_comparison.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SH3D/plots_TNO3d/SH3D_SANO_field_comparison_FINAL.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_AC2D_FNO2d.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_AC2D_FNO3d.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_AC2D_TNO2d.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_CH2DNL_FNO2d.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_CH2DNL_FNO3d.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_CH2DNL_TNO2d.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_CH2D_FNO2d.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_CH2D_FNO3d.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_CH2D_TNO2d.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_MBE2D_FNO2d.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_MBE2D_FNO3d.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_MBE2D_TNO2d.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_PFC2D_FNO2d.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_PFC2D_FNO3d.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_PFC2D_TNO2d.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_SH2D_FNO2d.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_SH2D_FNO3d.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config_SH2D_TNO2d.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_interface2.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_interface3.py" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -98,6 +120,7 @@
     &quot;Python.SH2D.executor&quot;: &quot;Run&quot;,
     &quot;Python.SH3D.executor&quot;: &quot;Run&quot;,
     &quot;Python.SH3D_FNO3d.executor&quot;: &quot;Run&quot;,
+    &quot;Python.SH3D_FNO4d.executor&quot;: &quot;Run&quot;,
     &quot;Python.SH3D_New.executor&quot;: &quot;Run&quot;,
     &quot;Python.SH3D_TNO3d.executor&quot;: &quot;Run&quot;,
     &quot;Python.SH3D_TNO3d_Hybrid.executor&quot;: &quot;Run&quot;,
@@ -153,7 +176,7 @@
       <recent name="$PROJECT_DIR$" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.AC3D_TNO3d">
+  <component name="RunManager" selected="Python.SH3D_FNO4d">
     <configuration name="AC3D_TNO3d" type="PythonConfigurationType" factoryName="Python">
       <module name="PhaseFieldNet" />
       <option name="ENV_FILES" value="" />
@@ -298,7 +321,7 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="SH3D_FNO3d" type="PythonConfigurationType" factoryName="Python">
+    <configuration name="SH3D_FNO4d" type="PythonConfigurationType" factoryName="Python">
       <module name="PhaseFieldNet" />
       <option name="ENV_FILES" value="" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -376,7 +399,7 @@
       <item itemvalue="Python.AC3d_TNO3d_hybrid" />
       <item itemvalue="Python.CH3D_TNO3d" />
       <item itemvalue="Python.MBE3D_TNO3d" />
-      <item itemvalue="Python.SH3D_FNO3d" />
+      <item itemvalue="Python.SH3D_FNO4d" />
       <item itemvalue="Python.SH3D_TNO3d" />
       <item itemvalue="Python.SH3D_TNO3d_Hybrid" />
     </list>
@@ -669,7 +692,39 @@
       <option name="project" value="LOCAL" />
       <updated>1754670090230</updated>
     </task>
-    <option name="localTasksCounter" value="23" />
+    <task id="LOCAL-00023" summary="Update AC3D">
+      <option name="closed" value="true" />
+      <created>1754672790191</created>
+      <option name="number" value="00023" />
+      <option name="presentableId" value="LOCAL-00023" />
+      <option name="project" value="LOCAL" />
+      <updated>1754672790191</updated>
+    </task>
+    <task id="LOCAL-00024" summary="Update AC3D">
+      <option name="closed" value="true" />
+      <created>1754673851251</created>
+      <option name="number" value="00024" />
+      <option name="presentableId" value="LOCAL-00024" />
+      <option name="project" value="LOCAL" />
+      <updated>1754673851251</updated>
+    </task>
+    <task id="LOCAL-00025" summary="Update FNO4d for SH3d">
+      <option name="closed" value="true" />
+      <created>1754676341305</created>
+      <option name="number" value="00025" />
+      <option name="presentableId" value="LOCAL-00025" />
+      <option name="project" value="LOCAL" />
+      <updated>1754676341305</updated>
+    </task>
+    <task id="LOCAL-00026" summary="update and removed old files">
+      <option name="closed" value="true" />
+      <created>1754724636734</created>
+      <option name="number" value="00026" />
+      <option name="presentableId" value="LOCAL-00026" />
+      <option name="project" value="LOCAL" />
+      <updated>1754724636734</updated>
+    </task>
+    <option name="localTasksCounter" value="27" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -730,7 +785,10 @@
     <MESSAGE value="update to 3D" />
     <MESSAGE value="TNO3d vs FNO3d" />
     <MESSAGE value="update main" />
-    <option name="LAST_COMMIT_MESSAGE" value="update main" />
+    <MESSAGE value="Update AC3D" />
+    <MESSAGE value="Update FNO4d for SH3d" />
+    <MESSAGE value="update and removed old files" />
+    <option name="LAST_COMMIT_MESSAGE" value="update and removed old files" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -796,11 +854,6 @@
           <option name="timeStamp" value="135" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/configs/config_PFC3D_TNO3d.py</url>
-          <line>44</line>
-          <option name="timeStamp" value="138" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/Test2.py</url>
           <line>16</line>
           <option name="timeStamp" value="144" />
@@ -823,6 +876,7 @@
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/PhaseField1$Test3.coverage" NAME="Test3 Coverage Results" MODIFIED="1739273938386" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$config_AC2D_FNO3d.coverage" NAME="config_AC2D_FNO3d Coverage Results" MODIFIED="1733233385695" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/configs" />
+    <SUITE FILE_PATH="coverage/phase_field_equations_4d$SH3D_FNO4d.coverage" NAME="SH3D_FNO4d Coverage Results" MODIFIED="1754676204903" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
     <SUITE FILE_PATH="coverage/PhaseField_SANO3D$main.coverage" NAME="main Coverage Results" MODIFIED="1743065376798" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/PhaseFieldNet$AC2D_Net2D_2.coverage" NAME="AC2D_Net2D_2 Coverage Results" MODIFIED="1732904114403" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/PhaseField_SANO3D$test2.coverage" NAME="test2 Coverage Results" MODIFIED="1742889074336" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
