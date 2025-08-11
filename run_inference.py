@@ -15,8 +15,8 @@ from scipy.io import savemat
 # ============================================================================
 # 1. CHOOSE CASE STUDY AND MODEL APPROACH
 # ============================================================================
-case_study = 'SH3D'    # Options: 'SH3D', 'AC3D', 'CH3D', 'MBE3D', 'PFC3D'
-approach = 'hybrid'  # Options: 'standard', 'hybrid'  <-- YOUR NEW CHOICE
+case_study = 'AC3D'    # Options: 'SH3D', 'AC3D', 'CH3D', 'MBE3D', 'PFC3D'
+approach = 'standard'  # Options: 'standard', 'hybrid'  <-- YOUR NEW CHOICE
 
 # Validate the approach choice
 if approach not in ['standard', 'hybrid']:
