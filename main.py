@@ -18,33 +18,24 @@ from post_processing import plot_loss_trend, plot_combined_results_3d, plot_comb
 import time
 from torch_optimizer import Lamb
 
-################################################################
-# Problem Definition
-################################################################
 
 ################################################################
 # Problem Definition
 ################################################################
-# problem = 'AC2D'
 #problem = 'AC3D'
-# problem = 'CH2DNL'
-# problem = 'SH2D'
-problem = 'SH3D'
-# problem = 'PFC2D'
+#problem = 'SH3D'
 #problem = 'PFC3D'
-# problem = 'MBE2D'
-#problem = 'MBE3D'
-# problem = 'CH2D'
+problem = 'MBE3D'
 #problem = 'CH3D'
 
-# network_name = 'TNO2d'
-# network_name = 'FNO2d'
-#network_name = 'FNO3d'
-network_name = 'FNO4d'
-#network_name = 'TNO3d'
 
-PINN_MODE =   False # True #  True #  False #  True #   True #    True #
-#  False #    True # False #  False  # False #
+#network_name = 'FNO3d'
+#network_name = 'FNO4d'
+network_name = 'TNO3d'
+
+# PI-MHNO
+PINN_MODE =   True # True #   False #
+
 
 print(f"problem = {problem}")
 print(f"network = {network_name}")
@@ -53,7 +44,7 @@ cf = importlib.import_module(f"configs.config_{problem}_{network_name}")
 network = getattr(importlib.import_module('networks'), network_name)
 torch.manual_seed(cf.torch_seed)
 np.random.seed(cf.numpy_seed)
-device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 print("Device: ", device)
 
 PDE_WEIGHT = cf.pde_weight
@@ -241,102 +232,6 @@ if cf.training:
     }, model_path)
 
 
-'''
-# Train the model
-if cf.training:
-    print("\n--- Starting Training ---")
-    if PINN_MODE:  # Use PINN loop regardless of weight (handles pde_weight=0 case)
-        grid_info = {
-            'Nx': cf.s, 'Ny': cf.s, 'Nz': cf.s,
-            'Lx': cf.Lx, 'Ly': cf.Lx, 'Lz': cf.Lx,
-            'dt_model': cf.dt_model,
-            'T_out': cf.T_out
-        }
-
-        # --- NEW: Define the two stages for the training curriculum ---
-        epochs_stage1 = 10
-        scaler_stage1 = 1e-4
-
-        # Calculate remaining epochs for stage 2
-        epochs_stage2 = cf.epochs - epochs_stage1
-        scaler_stage2 = 1e-6
-
-        # --- Stage 1 Training ---
-        print("\n--- Starting Training Stage 1 ---")
-        print(f"Epochs: {epochs_stage1}, PDE Scaler: {scaler_stage1:.2e}, PDE Weight: {PDE_WEIGHT:.2f}")
-
-        # Note: The 'model' object is updated in-place by the function call
-        model, train_mse_s1, train_l2_s1, test_data_s1, test_pde_s1, train_data_s1, train_pde_scl_s1, test_loss_s1 = (
-            train_hybrid(model, myloss, epochs_stage1, cf.batch_size, train_loader, test_loader,
-                         optimizer, scheduler, cf.normalized, normalizers, device,
-                         PDE_WEIGHT, grid_info, cf.epsilon, problem,
-                         pde_loss_scaler=scaler_stage1)
-        )
-
-        # --- Stage 2 Training (if there are remaining epochs) ---
-        if epochs_stage2 > 0:
-            print("\n--- Starting Training Stage 2 ---")
-            print(f"Epochs: {epochs_stage2}, PDE Scaler: {scaler_stage2:.2e}, PDE Weight: {PDE_WEIGHT:.2f}")
-
-            model, train_mse_s2, train_l2_s2, test_data_s2, test_pde_s2, train_data_s2, train_pde_scl_s2, test_loss_s2 = (
-                train_hybrid(model, myloss, epochs_stage2, cf.batch_size, train_loader, test_loader,
-                             optimizer, scheduler, cf.normalized, normalizers, device,
-                             PDE_WEIGHT, grid_info, cf.epsilon, problem,
-                             pde_loss_scaler=scaler_stage2)
-            )
-
-            # Combine the logs from both stages for plotting and saving
-            train_mse_hybrid_log = train_mse_s1 + train_mse_s2
-            train_l2_hybrid_log = train_l2_s1 + train_l2_s2
-            test_data_log = test_data_s1 + test_data_s2
-            test_pde_loss_scaled_log = test_pde_s1 + test_pde_s2
-            train_data_log = train_data_s1 + train_data_s2
-            train_pde_scaled_log = train_pde_scl_s1 + train_pde_scl_s2
-            test_loss_hybrid_log = test_loss_s1 + test_loss_s2
-        else:
-            # If only stage 1 was run, the final logs are just the stage 1 logs
-            train_mse_hybrid_log = train_mse_s1
-            train_l2_hybrid_log = train_l2_s1
-            test_data_log = test_data_s1
-            test_pde_loss_scaled_log = test_pde_s1
-            train_data_log = train_data_s1
-            train_pde_scaled_log = train_pde_scl_s1
-            test_loss_hybrid_log = test_loss_s1
-
-        print(f"\n--- Training Finished. Saving model and logs to {model_path} ---")
-        # The torch.save call remains the same, as the log variables have been correctly prepared
-        torch.save({
-            'model': model,
-            'train_mse_log': train_mse_hybrid_log,
-            'train_l2_log': train_l2_hybrid_log,
-            'test_l2_log': test_data_log, # 'test_l2_log' is used by evaluator, it should contain data loss
-            'test_pde_scaled_log': test_pde_loss_scaled_log,
-            'train_data_log': train_data_log,
-            'train_pde_scaled_log': train_pde_scaled_log,
-            'test_loss_hybrid_log': test_loss_hybrid_log
-        }, model_path)
-
-    else:  # Original Data-Driven Mode (This part remains unchanged)
-        if network_name == 'FNO2d' or network_name == 'FNO3d':
-            model, train_l2_log, test_l2_log = (
-                train_fno_time(model, myloss, cf.epochs, cf.batch_size, train_loader, test_loader,
-                               optimizer, scheduler, cf.normalized, normalizers, device))
-            train_mse_log = []
-        else:
-            model, train_mse_log, train_l2_log, test_l2_log = (
-                train_fno(model, myloss, cf.epochs, cf.batch_size, train_loader, test_loader,
-                          optimizer, scheduler, cf.normalized, normalizers, device))
-
-        print(f"Saving model and logs to {model_path}")
-        torch.save({
-            'model': model,
-            'train_mse_log': train_mse_log,
-            'train_l2_log': train_l2_log,
-            'test_l2_log': test_l2_log
-        }, model_path)
-'''
-
-
 end_time = time.time()
 Final_time = round(end_time - start_time, 2)
 print(f"Total Execution Time: {Final_time} seconds")
@@ -359,8 +254,8 @@ print(f"Model prediction time for the test set: {model_prediction_time:.4f} seco
 # This value MUST be updated manually with the time it took the numerical
 # solver to generate the ground truth data for the test set.
 # The value here is just an example.
-exact_solution_time = 3600.0  # Placeholder in seconds (e.g., 1 hour)
-print(f"Using placeholder for exact solution time: {exact_solution_time:.2f} seconds. PLEASE UPDATE THIS VALUE.")
+exact_solution_time = 1.0  # Placeholder
+
 # ===================== END: CAPTURE PREDICTION AND EXACT SOLUTION TIMES =====================
 
 
@@ -546,38 +441,6 @@ else:
 # MODIFIED: Use the new save function
 save_results(mat_filename, results_dict)
 
-# Plot XY-plane for the "Exact" solution trajectory (includes t=0)
-
-'''
-plot_xy_plane_subplots(domain=cf.domain,
-                       field=u_exact_for_plot,
-                       field_name='Exact Solution',
-                       time_steps=final_indices,
-                       desired_times=final_labels,
-                       plot_range=plot_range[0],
-                       problem=problem,
-                       network_name=network_name)
-
-# Plot XY-plane for the "Predicted" solution trajectory (includes t=0 from input)
-plot_xy_plane_subplots(domain=cf.domain,
-                       field=u_pred_for_plot,
-                       field_name='Predicted Solution',
-                       time_steps=final_indices,
-                       desired_times=final_labels,
-                       plot_range=plot_range[1],
-                       problem=problem,
-                       network_name=network_name)
-
-# Plot XY-plane for the "Error" (error is 0 at t=0)
-plot_xy_plane_subplots(domain=cf.domain,
-                       field=error_for_plot,
-                       field_name='Error',
-                       time_steps=final_indices,
-                       desired_times=final_labels,
-                       plot_range=plot_range[2],
-                       problem=problem,
-                       network_name=network_name)
-'''
 
 # Calculate L2 norm on original full prediction
 l2_norm_error = torch.norm(u_pred - u_exact, p=2)
