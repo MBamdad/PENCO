@@ -66,7 +66,7 @@ load_model = False # True # False # True  # False
 
 # Database
 parent_dir = './data/'
-matlab_dataset = 'PFC3D_1500_Nt_101_Nx_32.mat'
+matlab_dataset = 'PFC3D_Augmented_1500_Nt_101_Nx_32.mat'
 
 
 

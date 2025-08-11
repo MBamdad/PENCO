@@ -34,8 +34,6 @@ Std. deviation of testing error is 0.0021678071934729815
 
 import numpy as np
 
-# General SettingnTrain = 1200 # 5250 # 7500
-
 gpu_number = 'cuda:1'  # 'cuda:1'
 torch_seed = 0
 numpy_seed = 0
@@ -44,7 +42,7 @@ numpy_seed = 0
 nTrain = 1200
 nTest = 300
 batch_size = 20 # 50 # 100
-learning_rate = 0.005
+learning_rate = 0.001
 weight_decay = 1e-4 # 1e-4
 epochs = 30 # 50
 iterations = epochs * (nTrain // batch_size)
@@ -54,11 +52,10 @@ width_q = width # 32
 width_h = width//2 # 16
 n_layers = 2
 
-
 # Discretization
 s = 32 # 64 # 64
 T_in = 1
-T_out = 100 # 100
+T_out = 100 # 91
 
 # Training Setting
 normalized = True
@@ -103,4 +100,4 @@ pde_weight = 0.5 # Example: 70% physics loss
 # Learning Rate Scheduler Parameters (for StepLR)
 scheduler_step = 20  # Decay learning rate every 20 epochs
 scheduler_gamma = 0.5 # Multiply learning rate by 0.5 each time
-pde_loss_scaler = 1e-3
+pde_loss_scaler = 1e-2

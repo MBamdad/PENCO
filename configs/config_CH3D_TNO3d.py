@@ -65,5 +65,5 @@ pde_weight = 0.5 # Example: 70% physics loss
 # Learning Rate Scheduler Parameters (for StepLR)
 scheduler_step = 20  # Decay learning rate every 20 epochs
 scheduler_gamma = 0.5 # Multiply learning rate by 0.5 each time
-pde_loss_scaler = 1e-2
+pde_loss_scaler = 1e-5
 
