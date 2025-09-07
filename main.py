@@ -222,20 +222,16 @@ if cf.training:
     print("\n--- Starting Training ---")
     if PINN_MODE:
         grid_info = {
-            'Nx': cf.s,
-            'Ny': cf.s,
-            'Nz': cf.s,
-            'Lx': cf.Lx,
-            'Ly': cf.Lx,
-            'Lz': cf.Lx,
+            'Nx': cf.s, 'Ny': cf.s, 'Nz': cf.s,
+            'Lx': cf.Lx, 'Ly': cf.Lx, 'Lz': cf.Lx,
             'dt_model': cf.dt_model,
-            'T_out': cf.T_out,  # add this for completeness (not strictly required by trainer below)
-            'LAMBDA_PARAM': cf.lambda_param,  # use lambda_param from config (you already set it)
-            'EPSILON_PARAM': cf.epsilon,
+            'CAHN': cf.epsilon ** 2,  # <— add this (your MATLAB uses Cahn = epsilon^2)
         }
 
         print(f"Running Hybrid (PINN) training with pde_weight={cf.pde_weight:.2f}")
         if network_name == 'FNO4d':
+
+            '''
             (
                 model, train_total_log, train_data_log,
                 train_pde_log, test_l2_log
@@ -244,6 +240,17 @@ if cf.training:
                 optimizer, scheduler, cf.normalized, normalizers, device,
                 pde_weight=cf.pde_weight,
                 grid_info=grid_info
+            )
+            '''
+
+            (
+                model, train_total_log, train_data_log,
+                train_pde_log, test_l2_log
+            ) = train_hybrid_fno4d(
+                model, myloss, cf.epochs, train_loader, test_loader,
+                optimizer, scheduler, cf.normalized, normalizers, device,
+                pde_weight=cf.pde_weight,
+                grid_info=grid_info,
             )
 
 

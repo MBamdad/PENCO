@@ -472,3 +472,210 @@ class FNO4d(nn.Module):
         x = self.q(x)
         x = x.permute(0, 2, 3, 4, 1)  # (batch, x, y, z, 1)
         return x
+
+
+
+################################################################
+# UPGRADED FNO4d MODEL (REPLACES THE OLD ONE)
+################################################################
+class FNO4d_PINNs(nn.Module):
+    def __init__(self, modes1, modes2, modes3, width, width_q, width_h, T_in, T_out, n_layers):
+        super(FNO4d_PINNs, self).__init__()
+        """
+        This is the UPGRADED FNO4d model.
+        It takes T_in steps as input and correctly predicts a full trajectory of T_out steps.
+        This architecture is suitable for BOTH data-driven and hybrid PINN training.
+        """
+        self.modes1, self.modes2, self.modes3 = modes1, modes2, modes3
+        self.width, self.width_q, self.width_h = width, width_q, width_h
+        self.T_in, self.T_out = T_in, T_out
+        self.n_layers = n_layers
+
+        self.p = nn.Linear(self.T_in + 3, self.width)  # Input: u_in(x,y,z), x, y, z
+
+        self.convs = nn.ModuleList(
+            [SpectralConv3d(self.width, self.width, self.modes1, self.modes2, self.modes3) for _ in range(n_layers)])
+        self.mlps = nn.ModuleList([MLP3d(self.width, self.width, self.width) for _ in range(n_layers)])
+        self.ws = nn.ModuleList([nn.Conv3d(self.width, self.width, 1) for _ in range(n_layers)])
+
+        # MLPs for temporal evolution
+        self.q = MLP3d(self.width, 1, self.width_q, T_out)
+        self.h = MLP3d(1, 1, self.width_h, T_out - 1)
+
+    def forward(self, x):
+        # Input shape: (batch, S, S, S, T_in)
+        grid = get_grid_3d(x.shape[:-1], x.device)
+        x = torch.cat((x, grid), dim=-1)
+        x = self.p(x)
+        x = x.permute(0, 4, 1, 2, 3)  # (batch, width, S, S, S)
+
+        # Apply FNO layers
+        for i in range(self.n_layers):
+            x1 = self.convs[i](x)
+            x1 = self.mlps[i](x1)
+            x2 = self.ws[i](x)
+            x = x1 + x2
+            if i < self.n_layers - 1:
+                x = F.gelu(x)
+
+        # Temporal evolution loop to generate the trajectory
+        X = torch.zeros(*grid.shape[:-1], self.T_out, device=x.device)
+
+        # First time step
+        xt = self.q(x, t=0)
+        X[..., 0] = xt.permute(0, 2, 3, 4, 1).squeeze(-1)
+
+        # Subsequent time steps
+        for t in range(1, self.T_out):
+            x1 = self.q(x, t)
+            x2 = self.h(xt, t - 1)
+            xt = x1 + x2
+            X[..., t] = xt.permute(0, 2, 3, 4, 1).squeeze(-1)
+
+        # Output shape: (batch, S, S, S, T_out)
+        return X
+
+
+
+class FNO3d_onestep(nn.Module):
+    """
+    A simple, one-step FNO model that predicts the next u(t+dt) from u(t).
+    Designed for the non-dimensionalized Allen-Cahn equation.
+    """
+
+    def __init__(self, modes1, modes2, modes3, width, n_layers):
+        super(FNO3d_onestep, self).__init__()
+        self.modes1 = modes1
+        self.modes2 = modes2
+        self.modes3 = modes3
+        self.width = width
+        self.n_layers = n_layers
+
+        self.p = nn.Linear(4, self.width)  # Input: u, x, y, z
+
+        self.convs = nn.ModuleList()
+        self.ws = nn.ModuleList()
+        for _ in range(self.n_layers):
+            self.convs.append(SpectralConv3d(self.width, self.width, self.modes1, self.modes2, self.modes3))
+            self.ws.append(nn.Conv3d(self.width, self.width, 1))
+
+        self.q = nn.Linear(self.width, 1)  # Output: just the next u
+
+    def forward(self, x):
+        #grid = get_grid_3d(x.shape, x.device)
+        # NEW, CORRECTED LINE:
+        grid = get_grid_3d(x.shape[:-1], x.device)  # Use spatial dimensions only
+
+        x = torch.cat((x, grid), dim=-1)
+        x = self.p(x)
+        x = x.permute(0, 4, 1, 2, 3)
+
+        #x = torch.cat((x, grid), dim=-1)
+        #x = self.p(x)
+        #x = x.permute(0, 4, 1, 2, 3)
+
+        for i in range(self.n_layers):
+            x1 = self.convs[i](x)
+            x2 = self.ws[i](x)
+            x = x1 + x2
+            if i < self.n_layers - 1:
+                x = F.gelu(x)
+
+        x = x.permute(0, 2, 3, 4, 1)
+        x = self.q(x)  # Shape: (batch, S, S, S, 1)
+        return x
+
+
+class MLP3D(nn.Module):
+    def __init__(self, in_channels, out_channels, mid_channels, T=1, num_layers=2):
+        super(MLP3D, self).__init__()
+        self.num_layers = num_layers
+        self.layers = nn.ModuleList()
+        for _ in range(T):
+            self.layers.append(nn.Conv3d(in_channels, mid_channels, 1))
+            for _ in range(self.num_layers - 2):
+                self.layers.append(nn.Conv3d(mid_channels, mid_channels, 1))
+            self.layers.append(nn.Conv3d(mid_channels, out_channels, 1))
+
+    def forward(self, x, t=0):
+        start = t * self.num_layers
+        end = start + self.num_layers
+        for i in range(start, end - 1):
+            x = F.gelu(self.layers[i](x))
+        x = self.layers[end - 1](x)
+        return x
+
+
+class FNO4d_onestep(nn.Module):
+    """
+    A true one-step adaptation of the FNO4d architecture.
+    It includes the MLP blocks for local mixing, just like the original.
+    """
+
+    def __init__(self, modes1, modes2, modes3, width, n_layers):
+        super(FNO4d_onestep, self).__init__()
+        self.modes1 = modes1
+        self.modes2 = modes2
+        self.modes3 = modes3
+        self.width = width
+        self.n_layers = n_layers
+
+        # Input is u(t) (1 channel) + (x,y,z) coords (3 channels) = 4
+        # We use a Linear layer, but the original FNO4d used MLP3d as `p`
+        # Let's stick to the simpler Linear for lifting, which is common.
+        self.p = nn.Linear(4, self.width)
+
+        self.convs = nn.ModuleList([
+            SpectralConv3d(self.width, self.width, self.modes1, self.modes2, self.modes3)
+            for _ in range(n_layers)
+        ])
+
+        # --- THIS IS THE KEY CORRECTION ---
+        # The original FNO4d uses both a spectral conv (global) and an MLP/Conv (local)
+        # Our previous FNO4d_onestep was missing this local path.
+        self.mlps = nn.ModuleList([MLP3D(self.width, self.width, self.width) for _ in range(n_layers)])
+        self.ws = nn.ModuleList([nn.Conv3d(self.width, self.width, 1) for _ in range(n_layers)])
+
+        # The projection `q` in the original is also an MLP3d, not a Linear layer.
+        self.q = MLP3D(self.width, 1, self.width)
+
+    def forward(self, x):
+        # Expects input x of shape: (batch, size_x, size_y, size_z, 1)
+        grid = get_grid_3D(x.shape, x.device)
+        x = torch.cat((x, grid), dim=-1)
+        x = self.p(x)
+        x = x.permute(0, 4, 1, 2, 3)
+
+        for i in range(self.n_layers):
+            x1 = self.convs[i](x)
+            # --- ADDING THE MISSING MLP PATH ---
+            x1 = self.mlps[i](x1)
+            x2 = self.ws[i](x)
+            x = x1 + x2
+            if i < self.n_layers - 1:
+                x = F.gelu(x)
+
+        # The projection `q` is an MLP (which uses Conv3d), so it expects (B, C, X, Y, Z)
+        x = self.q(x)
+
+        # Permute back to spatial layout: (batch, x, y, z, channels)
+        x = x.permute(0, 2, 3, 4, 1)
+        return x
+
+
+def laplacian_fourier_3d(u, dx):
+    """ Calculates the 3D Laplacian. u shape: (batch, nx, ny, nz) """
+    nx, ny, nz = u.shape[1], u.shape[2], u.shape[3]
+    k_x = torch.fft.fftfreq(nx, d=dx).to(u.device)
+    k_y = torch.fft.fftfreq(ny, d=dx).to(u.device)
+    k_z = torch.fft.fftfreq(nz, d=dx).to(u.device)
+    kx, ky, kz = torch.meshgrid(k_x, k_y, k_z, indexing='ij')
+
+    minus_k_squared = -(kx ** 2 + ky ** 2 + kz ** 2) * (2 * np.pi) ** 2
+    minus_k_squared = minus_k_squared.unsqueeze(0)
+
+    u_ft = torch.fft.fftn(u, dim=[1, 2, 3])
+    u_lap_ft = minus_k_squared * u_ft
+    u_lap = torch.fft.ifftn(u_lap_ft, dim=[1, 2, 3])
+    return u_lap.real
+

@@ -1799,192 +1799,185 @@ def train_fno4d(model, myloss, epochs, batch_size, train_loader, test_loader,
 
     return model, train_mse_log, train_l2_log, test_l2_log
 
-##
+###############################
+###############################
 
-
+# ------------------------- FNO4d hybrid trainer (discrete physics) -------------------------
 import torch
 import torch.nn.functional as F
-from timeit import default_timer
 import numpy as np
-
-# ---------------------------
-# Helpers for physics loss
-# ---------------------------
-def _laplacian_fourier_3d(u, dx):
-    """
-    Spectral Laplacian in 3D.
-    u: (B,Sx,Sy,Sz) real
-    dx: grid spacing (assume uniform, unit box => dx=1/Sx if not provided)
-    """
-    B, nx, ny, nz = u.shape
-    device = u.device
-    kx = torch.fft.fftfreq(nx, d=dx).to(device)
-    ky = torch.fft.fftfreq(ny, d=dx).to(device)
-    kz = torch.fft.fftfreq(nz, d=dx).to(device)
-    KX, KY, KZ = torch.meshgrid(kx, ky, kz, indexing='ij')
-    minus_k2 = -(KX**2 + KY**2 + KZ**2) * (2 * np.pi) ** 2
-    u_ft = torch.fft.fftn(u, dim=(-3, -2, -1))
-    u_lap_ft = minus_k2 * u_ft
-    u_lap = torch.fft.ifftn(u_lap_ft, dim=(-3, -2, -1)).real
-    return u_lap
+from timeit import default_timer
 
 
-def get_physics_derivatives(u, dt, epsilon, lambda_param, dx):
-    """
-    Computes the physical derivative terms from a data trajectory.
-    u: The solution trajectory of shape (B, S, S, S, T)
-    """
-    # Time derivative u_t, approximated with finite differences
-    # We compute it for all steps except the last one
-    u_t_data = (u[..., 1:] - u[..., :-1]) / dt
-
-    # Spatial term mu_spatial
-    # We compute it for all steps except the first one, to match u_t_data
-    u_for_mu = u[..., 1:]
-
-    # Reshape for batch processing in the laplacian function
-    B, S, _, _, T = u_for_mu.shape
-    u_reshaped = u_for_mu.permute(0, 4, 1, 2, 3).reshape(B * T, S, S, S)
-
-    lap_u_reshaped = _laplacian_fourier_3d(u_reshaped, dx)
-    reaction_reshaped = u_reshaped ** 3 - u_reshaped
-
-    mu_spatial_reshaped = (epsilon ** 2) * lap_u_reshaped - reaction_reshaped
-
-    # Reshape back to original trajectory format
-    mu_spatial_data = mu_spatial_reshaped.reshape(B, T, S, S, S).permute(0, 2, 3, 4, 1)
-
-    return u_t_data, mu_spatial_data
+def _spectral_k2(Nx, Ny, Nz, Lx, Ly, Lz, device):
+    hx = Lx / Nx; hy = Ly / Ny; hz = Lz / Nz
+    kx = 2.0 * np.pi * np.fft.fftfreq(Nx, d=hx)
+    ky = 2.0 * np.pi * np.fft.fftfreq(Ny, d=hy)
+    kz = 2.0 * np.pi * np.fft.fftfreq(Nz, d=hz)
+    kxx, kyy, kzz = np.meshgrid(kx**2, ky**2, kz**2, indexing="ij")
+    k2 = (kxx + kyy + kzz).astype(np.float32)
+    return torch.as_tensor(k2, device=device, dtype=torch.complex64)
 
 
-# The final, simplified, and complete trainer function.
-def _allen_cahn_pde_terms(u_prev, u_pred, dt, epsilon, lambda_param, dx):
-
-    # Temporal part
-    u_t_term = u_pred - u_prev
-
-    # Spatial part
-    lap_u = _laplacian_fourier_3d(u_pred, dx)
-    reaction = u_pred ** 3 - u_pred
-    # YOUR SUCCESSFUL MANUAL BALANCING SCALER:
-    mu_spatial = 1e0 * ((epsilon ** 2) * lap_u - reaction)
-
-    # The physically correct residual
-    residual = u_t_term - mu_spatial
-
-    # Return the MSE of the residual (for loss) and components (for logging)
-    pde_residual_mse = 0.1 * torch.mean(residual ** 2)
-    ut_term_mse = torch.mean(u_t_term ** 2)
-    mu_term_mse = 0.1 * torch.mean(mu_spatial ** 2)
-
-    return pde_residual_mse, ut_term_mse, mu_term_mse
+def _laplacian_spectral(u, k2_complex):
+    # u: (B, s, s, s) real -> Δu (B, s, s, s) real
+    u_fft = torch.fft.fftn(u, dim=(1, 2, 3))
+    lap_fft = -k2_complex * u_fft
+    return torch.fft.ifftn(lap_fft, dim=(1, 2, 3)).real
 
 
-# ========================================================================================
-# === STEP 2: Replace your trainer with this final, simplified, and correct version ===
-# ========================================================================================
+def _periodic_bc_loss(u):
+    # u: (B, s, s, s)
+    loss_x = F.mse_loss(u[:, 0, :, :],  u[:, -1, :, :])
+    loss_y = F.mse_loss(u[:, :, 0, :],  u[:, :, -1, :])
+    loss_z = F.mse_loss(u[:, :, :, 0],  u[:, :, :, -1])
+    bc_val = (loss_x + loss_y + loss_z) / 3.0
+
+    dx0 = u[:, 1, :, :]  - u[:, 0, :, :]
+    dxN = u[:, -1, :, :] - u[:, -2, :, :]
+    dy0 = u[:, :, 1, :]  - u[:, :, 0, :]
+    dyN = u[:, :, -1, :] - u[:, :, -2, :]
+    dz0 = u[:, :, :, 1]  - u[:, :, :, 0]
+    dzN = u[:, :, :, -1] - u[:, :, :, -2]
+    bc_grad = (F.mse_loss(dx0, dxN) + F.mse_loss(dy0, dyN) + F.mse_loss(dz0, dzN)) / 3.0
+    return bc_val, bc_grad
+
+
 def train_hybrid_fno4d(
-        model, myloss, epochs, train_loader, test_loader, optimizer, scheduler,
-        normalized, normalizers, device,
-        pde_weight=0.0,
-        data_loss_scaler=1.0,  # The crucial scaler for the data loss term
-        grid_info=None, epsilon=0.1
+    model, myloss, epochs, train_loader, test_loader,
+    optimizer, scheduler, normalized, normalizers, device,
+    pde_weight=0.25,
+    grid_info=None,
+    pde_loss_scaler=1.0,
+    lambda_bc_val=1e-3,
+    lambda_bc_grad=0.0,
 ):
-    y_normalizer = x_normalizer = None
-    if normalized and normalizers:
-        if normalizers[0]: x_normalizer = normalizers[0].to(device)
-        if normalizers[1]: y_normalizer = normalizers[1].to(device)
+    """
+    One-step FNO4d hybrid trainer (Allen–Cahn dataset generated by semi-implicit scheme)
 
-    if grid_info is None: grid_info = {}
-    Nx, dt_model = grid_info.get('Nx'), grid_info.get('dt_model')
-    if Nx is None or dt_model is None: raise ValueError("grid_info must provide Nx and dt_model.")
+    Inputs/targets from your pipeline:
+      x: (B, s, s, s, T_in)
+      y: (B, s, s, s, T_out)   # we supervise only the first future step y[..., 0:1]
+      out = model(x): (B, s, s, s, 1)
 
-    lambda_param = grid_info.get('LAMBDA_PARAM', 1.0)
-    epsilon_param = grid_info.get('EPSILON_PARAM', epsilon)
-    dx = 1.0 / Nx
-    num_grid_points = Nx * Nx * Nx
+    Discrete residual (matching your generator):
+      r = u_next - dt*Δ u_next - u_prev + (dt/Cahn) * (u_prev^3 - u_prev)
 
-    train_total_log, train_data_log, train_pde_log, test_l2_log = [], [], [], []
+    grid_info expects:
+      {'Nx','Ny','Nz','Lx','Ly','Lz','dt_model','EPSILON_PARAM' or 'CAHN'}
+      NOTE: CAHN = epsilon^2 in your MATLAB (i.e., 0.01 if epsilon=0.1).
+    """
+    assert grid_info is not None, "grid_info dict is required"
+
+    s  = int(grid_info["Nx"])
+    Lx = float(grid_info["Lx"]); Ly = float(grid_info.get("Ly", Lx)); Lz = float(grid_info.get("Lz", Lx))
+    dt = float(grid_info["dt_model"])
+    # Prefer explicit CAHN if provided; otherwise infer from EPSILON_PARAM
+    if "CAHN" in grid_info:
+        CAHN = float(grid_info["CAHN"])
+    else:
+        eps = float(grid_info.get("EPSILON_PARAM", 0.1))  # epsilon
+        CAHN = eps**2                                     # Cahn = epsilon^2
+
+    k2_complex = _spectral_k2(s, s, s, Lx, Ly, Lz, device)
+
+    a_normalizer = normalizers[0].to(device) if (normalized and normalizers and normalizers[0] is not None) else None
+    y_normalizer = normalizers[1].to(device) if (normalized and normalizers and normalizers[1] is not None) else None
+
+    train_total_log, train_data_log, train_pde_scaled_log, test_l2_log = [], [], [], []
+
+    print("\nNo. Epoch   Time (s)       Train(data)    Train(PDEs)     Train(total)   Test(data)")
+    print("--------------------------------------------------------------------------")
+    print("  ep        dt(s)        MSE(data)      Phys(scaled)     Total(hybrid)    Val(data)")
 
     for ep in range(epochs):
         model.train()
         t1 = default_timer()
-
-        # Initialize accumulators for the epoch
-        total_loss_epoch, data_loss_epoch = 0.0, 0.0
-        pde_res_epoch, ut_epoch, mu_epoch = 0.0, 0.0, 0.0
-        train_samples = 0
+        sum_data = 0.0
+        sum_phys = 0.0
+        nb = 0
 
         for x, y in train_loader:
-            x, y = x.to(device), y.to(device)
-            current_batch_size = x.shape[0]
-            train_samples += current_batch_size
+            nb += 1
+            x = x.to(device)                           # (B,s,s,s,T_in)
+            y = y.to(device)                           # (B,s,s,s,T_out)
+            y_next = y[..., 0:1]                       # (B,s,s,s,1) one-step supervision
 
             optimizer.zero_grad()
 
-            # --- Forward Pass and Decoding ---
-            out = model(x)
-            out_dec, y_dec = (y_normalizer.decode(out), y_normalizer.decode(y)) if normalized and y_normalizer else (
-            out, y)
+            out = model(x)                             # (B,s,s,s,1)
 
-            # --- Loss Calculation ---
-            data_loss_summed = myloss(out_dec.flatten(start_dim=1), y_dec.flatten(start_dim=1))
+            # ---- decode to physical scale ----
+            if y_normalizer is not None:
+                out_phys = y_normalizer.decode(out)
+                y_phys   = y_normalizer.decode(y_next)
+            else:
+                out_phys = out
+                y_phys   = y_next
 
-            u_prev = x_normalizer.decode(x)[..., -1] if normalized and x_normalizer else x[..., -1]
-            u_pred_phys = out_dec[..., 0]
-
-            pde_residual_mse, temporal_mse, spatial_mse = _allen_cahn_pde_terms(
-                u_prev, u_pred_phys, dt_model, epsilon_param, lambda_param, dx
+            data_loss = F.mse_loss(
+                out_phys.flatten(start_dim=1),
+                y_phys.flatten(start_dim=1),
+                reduction='mean'
             )
 
-            pde_loss_summed = pde_residual_mse * current_batch_size * num_grid_points
+            # ---- physics (discrete residual, teacher forcing on u_prev) ----
+            u_next = out_phys[..., 0]                  # (B,s,s,s)
+            if a_normalizer is not None:
+                x_phys = a_normalizer.decode(x)        # (B,s,s,s,T_in)
+                u_prev = x_phys[..., -1]               # last known frame
+            else:
+                u_prev = x[..., -1]
 
-            # This single line handles all cases cleanly and applies the crucial scaling.
-            loss = (data_loss_scaler * data_loss_summed) + (pde_weight * pde_loss_summed)
+            lap_u_next = _laplacian_spectral(u_next, k2_complex)
 
-            loss.backward()
+            # r = u_next - dt*Δ u_next - u_prev + (dt/CAHN)*(u_prev^3 - u_prev)
+            r = u_next - dt * lap_u_next - u_prev + (dt / CAHN) * (u_prev**3 - u_prev)
+            pde_loss = torch.mean(r**2)
+
+            # periodic BC (tiny weight – spectral update already enforces periodicity)
+            bc_val, bc_grad = _periodic_bc_loss(u_next)
+            physics_loss = pde_loss_scaler * pde_loss + lambda_bc_val * bc_val + lambda_bc_grad * bc_grad
+
+            total = (1.0 - pde_weight) * data_loss + pde_weight * physics_loss
+
+            total.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             scheduler.step()
 
-            # --- Accumulate Logs ---
-            total_loss_epoch += loss.item()
-            data_loss_epoch += data_loss_summed.item()
-            pde_res_epoch += pde_residual_mse.item()
-            ut_epoch += temporal_mse.item()
-            mu_epoch += spatial_mse.item()
+            sum_data += data_loss.item()
+            sum_phys += physics_loss.item()
 
-        # --- Evaluation Loop ---
+        # epoch means
+        mean_data = sum_data / max(1, nb)
+        mean_phys = sum_phys / max(1, nb)
+        mean_total = (1.0 - pde_weight) * mean_data + pde_weight * mean_phys
+
+        # ---- validation (data only, one-step) ----
         model.eval()
-        test_l2, test_samples = 0.0, 0
         with torch.no_grad():
-            for x, y in test_loader:
-                test_samples += x.shape[0]
-                out = model(x.to(device))
-                out_dec, y_dec = (
-                y_normalizer.decode(out), y_normalizer.decode(y.to(device))) if normalized and y_normalizer else (
-                out, y.to(device))
-                test_l2 += myloss(out_dec.flatten(start_dim=1), y_dec.flatten(start_dim=1)).item()
-
-        # --- Normalize and Store Logs for Reporting ---
-        avg_total_loss = total_loss_epoch / train_samples
-        avg_data_loss = data_loss_epoch / train_samples
-        test_l2 /= test_samples
-
-        num_batches = len(train_loader)
-        avg_pde_res = pde_res_epoch / num_batches if num_batches > 0 else 0.0
-        avg_ut = ut_epoch / num_batches if num_batches > 0 else 0.0
-        avg_mu = mu_epoch / num_batches if num_batches > 0 else 0.0
-
-        train_total_log.append(avg_total_loss)
-        train_data_log.append(avg_data_loss)
-        train_pde_log.append(avg_pde_res)
-        test_l2_log.append(test_l2)
+            val_sum = 0.0
+            vn = 0
+            for xv, yv in test_loader:
+                vn += 1
+                xv = xv.to(device)
+                yv = yv.to(device)
+                yv_next = yv[..., 0:1]
+                ov = model(xv)
+                if y_normalizer is not None:
+                    ov      = y_normalizer.decode(ov)
+                    yv_next = y_normalizer.decode(yv_next)
+                val_sum += F.mse_loss(ov.flatten(start_dim=1), yv_next.flatten(start_dim=1), reduction='mean').item()
+            val_mean = val_sum / max(1, vn)
 
         t2 = default_timer()
-        # --- Using your requested print statement ---
-        if ep == 0:
-            print("Epoch   Time(s)   Total Loss   Data Loss    PDE Res(M)   Test L2      u_t Term MSE μ Term MSE")
-        print(f"{ep:<7} {t2 - t1:<9.3f} {avg_total_loss:<12.4e} {avg_data_loss:<12.4e} {avg_pde_res:<12.4e} "
-              f"{test_l2:<12.4e} {avg_ut:<12.4e} {avg_mu:<12.4e}")
+        print(f"{ep:4d}    {t2 - t1:10.4f}    {mean_data:12.6e}  {mean_phys:12.6e}  "
+              f"{mean_total:12.6e}  {val_mean:12.6e}")
 
-    return model, train_total_log, train_data_log, train_pde_log, test_l2_log
+        train_data_log.append(mean_data)
+        train_pde_scaled_log.append(mean_phys)
+        train_total_log.append(mean_total)
+        test_l2_log.append(val_mean)
+
+    return model, train_total_log, train_data_log, train_pde_scaled_log, test_l2_log
