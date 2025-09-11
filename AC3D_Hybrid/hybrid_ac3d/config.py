@@ -37,7 +37,7 @@ EPOCHS = 30 # 100
 BATCH_SIZE = 8
 LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 1e-5
-PDE_WEIGHT = 0.25       # 25% physics
+PDE_WEIGHT = 0.0       # 25% physics
 USE_AMP = False            # mixed precision for speed
 
 # ——— Debug print scaling (to mimic your PINNs prints) ———
