@@ -5,6 +5,7 @@ from utilities import build_loaders, train_fno_hybrid, evaluate_stats_and_plot
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
+
 def set_seeds(seed=42):
     np.random.seed(seed)
     random.seed(seed)
