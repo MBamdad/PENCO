@@ -93,8 +93,11 @@ def semi_implicit_step(u_in, dt, dx, eps2):
     nl = u0**3 - u0
     u0_hat = torch.fft.fftn(u0,   dim=[1,2,3])
     nl_hat = torch.fft.fftn(nl,   dim=[1,2,3])
+    # numerator
     num = u0_hat - (dt/eps2) * nl_hat
+    # denominator
     den = (1.0 + dt * k2)
+
     u1_hat = num / den
     u1 = torch.fft.ifftn(u1_hat, dim=[1,2,3]).real
     return u1.unsqueeze(-1)

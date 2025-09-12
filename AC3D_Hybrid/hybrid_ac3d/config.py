@@ -5,6 +5,9 @@ import numpy as np
 SEED = 42
 DEVICE = torch.device('cuda:2' if torch.cuda.is_available() else 'cpu')
 
+# Model
+MODEL = 'TNO3d' # 'TNO3d   , FNO4d
+# '
 # ——— Geometry & Time (match MATLAB) ———
 GRID_RESOLUTION = 32
 L_DOMAIN = 2.0
@@ -30,14 +33,15 @@ N_TEST = 25
 MODES = 12
 WIDTH = 12 # 32
 WIDTH_Q = 12 # 32
+WIDTH_H = 12
 N_LAYERS = 2 #4
 
 # ——— Training ———
-EPOCHS = 30 # 100
+EPOCHS = 50 # 50 # 100
 BATCH_SIZE = 8
 LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 1e-5
-PDE_WEIGHT = 0.0       # 25% physics
+PDE_WEIGHT = 0.25       # 25% physics
 USE_AMP = False            # mixed precision for speed
 
 # ——— Debug print scaling (to mimic your PINNs prints) ———

@@ -171,7 +171,7 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
             if amp_allowed:
                 with autocast('cuda', enabled=True):
                     y_pred = model(x)
-                    loss_data = F.mse_loss(y_pred, y)
+                    loss_data = 1e4 * F.mse_loss(y_pred, y)
 
                     # --- physics bundle (midpoint + Fourier scheme + minimizing-movement) ---
                     # midpoint (plain) and normalized version, mixed
@@ -181,12 +181,12 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
 
                     l_fft = scheme_residual_fourier(u_in_last, y_pred)
                     l_mm, l_proj_dbg, l_stat_dbg = loss_mm_projection(u_in_last, y_pred)
-                    loss_phys = w_mid*l_mid + w_fft*l_fft + w_mm*l_mm
+                    loss_phys = 1e-4 * (w_mid*l_mid + w_fft*l_fft + w_mm*l_mm)
 
                     # teacher & energy (small)
                     u_si = semi_implicit_step(u_in_last, config.DT, config.DX, config.EPS2)
                     loss_scheme = F.mse_loss(y_pred, u_si)          # soft teacher
-                    loss_energy = 0.05 * energy_penalty(u_in_last, y_pred, config.DX, config.EPS2)
+                    loss_energy = 1 * energy_penalty(u_in_last, y_pred, config.DX, config.EPS2)
 
                     loss_total = (1.0 - pde_weight) * loss_data + pde_weight * (loss_phys + loss_scheme + loss_energy)
 
@@ -200,7 +200,7 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
             else:
                 # standard FP32 path
                 y_pred = model(x)
-                loss_data = F.mse_loss(y_pred, y)
+                loss_data = 1e0 * F.mse_loss(y_pred, y) # 1e4 for hybrid AC3D
 
                 l_mid_plain = physics_residual_midpoint(u_in_last, y_pred)
                 l_mid_norm, _, _ = physics_residual_normalized(u_in_last, y_pred)
@@ -208,11 +208,11 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
 
                 l_fft = scheme_residual_fourier(u_in_last, y_pred)
                 l_mm, l_proj_dbg, l_stat_dbg = loss_mm_projection(u_in_last, y_pred)
-                loss_phys = w_mid*l_mid + w_fft*l_fft + w_mm*l_mm
+                loss_phys = 1e-4 * (w_mid*l_mid + w_fft*l_fft + w_mm*l_mm)
 
                 u_si = semi_implicit_step(u_in_last, config.DT, config.DX, config.EPS2)
                 loss_scheme = F.mse_loss(y_pred, u_si)
-                loss_energy = 0.05 * energy_penalty(u_in_last, y_pred, config.DX, config.EPS2)
+                loss_energy = 1 * energy_penalty(u_in_last, y_pred, config.DX, config.EPS2) # 0.05
 
                 loss_total = (1.0 - pde_weight) * loss_data + pde_weight * (loss_phys + loss_scheme + loss_energy)
                 loss_total.backward()
