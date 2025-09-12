@@ -8,7 +8,6 @@ from functions import (
     mu_ac, physics_residual_midpoint, scheme_residual_fourier, loss_mm_projection,
     semi_implicit_step, energy_penalty, physics_residual_normalized
 )
-from torch.amp import GradScaler, autocast
 import matplotlib
 matplotlib.use('TkAgg')
 
@@ -127,29 +126,15 @@ def relative_l2(a, b, eps=1e-12):
     den = torch.sqrt(torch.sum(denom**2, dim=1) + eps)
     return (num / den)  # (B,)
 
-def model_has_complex_params(model):
-    for p in model.parameters():
-        if p.is_complex():
-            return True
-    for b in model.buffers():
-        if b.is_complex():
-            return True
-    return False
-
 # ---------------------
-# Training: revert to stable hybrid + small robustness
+# Training: hybrid
 # ---------------------
 def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, device, pde_weight=None):
     pde_weight = config.PDE_WEIGHT if pde_weight is None else pde_weight
 
-    amp_allowed = config.USE_AMP and (not model_has_complex_params(model))
-    scaler = GradScaler('cuda', enabled=amp_allowed)
-
     # physics term weights (as in the good baseline)
     w_mid, w_fft, w_mm = 1.0, 1.0, 1.0
-    # mix ratio for normalized midpoint (robust scaling)
     MID_NORM_MIX = 0.5
-    # gradient clip to avoid rare spikes in PhysLoss
     CLIP_NORM = 1.0
 
     print("Epoch |   Time   | DataLoss | PhysLoss | TotalLoss | u_t Term | μ_spatial Term | Test relL2 | energy_loss | scheme_loss | LR")
@@ -168,63 +153,39 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
 
             optimizer.zero_grad(set_to_none=True)
 
-            if amp_allowed:
-                with autocast('cuda', enabled=True):
-                    y_pred = model(x)
-                    loss_data = 1e4 * F.mse_loss(y_pred, y)
-
-                    # --- physics bundle (midpoint + Fourier scheme + minimizing-movement) ---
-                    # midpoint (plain) and normalized version, mixed
-                    l_mid_plain = physics_residual_midpoint(u_in_last, y_pred)
-                    l_mid_norm, _, _ = physics_residual_normalized(u_in_last, y_pred)
-                    l_mid = (1.0 - MID_NORM_MIX) * l_mid_plain + MID_NORM_MIX * l_mid_norm
-
-                    l_fft = scheme_residual_fourier(u_in_last, y_pred)
-                    l_mm, l_proj_dbg, l_stat_dbg = loss_mm_projection(u_in_last, y_pred)
-                    loss_phys = 1e-4 * (w_mid*l_mid + w_fft*l_fft + w_mm*l_mm)
-
-                    # teacher & energy (small)
-                    u_si = semi_implicit_step(u_in_last, config.DT, config.DX, config.EPS2)
-                    loss_scheme = F.mse_loss(y_pred, u_si)          # soft teacher
-                    loss_energy = 1 * energy_penalty(u_in_last, y_pred, config.DX, config.EPS2)
-
-                    loss_total = (1.0 - pde_weight) * loss_data + pde_weight * (loss_phys + loss_scheme + loss_energy)
-
-                # AMP backward + grad clip
-                scaler.scale(loss_total).backward()
-                scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), CLIP_NORM)
-                scaler.step(optimizer)
-                scaler.update()
-
+            # forward
+            y_pred = model(x)
+            if pde_weight == 0:
+                loss_data = 1e0 * F.mse_loss(y_pred, y)
             else:
-                # standard FP32 path
-                y_pred = model(x)
-                loss_data = 1e0 * F.mse_loss(y_pred, y) # 1e4 for hybrid AC3D
+                loss_data = 1e4 * F.mse_loss(y_pred, y) # make balance by physics loss
 
-                l_mid_plain = physics_residual_midpoint(u_in_last, y_pred)
-                l_mid_norm, _, _ = physics_residual_normalized(u_in_last, y_pred)
-                l_mid = (1.0 - MID_NORM_MIX) * l_mid_plain + MID_NORM_MIX * l_mid_norm
+            # physics bundle
+            l_mid_plain = physics_residual_midpoint(u_in_last, y_pred)
+            l_mid_norm, _, _ = physics_residual_normalized(u_in_last, y_pred)
+            l_mid = (1.0 - MID_NORM_MIX) * l_mid_plain + MID_NORM_MIX * l_mid_norm
 
-                l_fft = scheme_residual_fourier(u_in_last, y_pred)
-                l_mm, l_proj_dbg, l_stat_dbg = loss_mm_projection(u_in_last, y_pred)
-                loss_phys = 1e-4 * (w_mid*l_mid + w_fft*l_fft + w_mm*l_mm)
+            l_fft = scheme_residual_fourier(u_in_last, y_pred)
+            l_mm, l_proj_dbg, l_stat_dbg = loss_mm_projection(u_in_last, y_pred)
+            loss_phys = 1e-4 * (w_mid*l_mid + w_fft*l_fft + w_mm*l_mm)
 
-                u_si = semi_implicit_step(u_in_last, config.DT, config.DX, config.EPS2)
-                loss_scheme = F.mse_loss(y_pred, u_si)
-                loss_energy = 1 * energy_penalty(u_in_last, y_pred, config.DX, config.EPS2) # 0.05
+            # teacher & energy
+            u_si = semi_implicit_step(u_in_last, config.DT, config.DX, config.EPS2)
+            loss_scheme = F.mse_loss(y_pred, u_si)
+            loss_energy = 0.05 * energy_penalty(u_in_last, y_pred, config.DX, config.EPS2)
 
-                loss_total = (1.0 - pde_weight) * loss_data + pde_weight * (loss_phys + loss_scheme + loss_energy)
-                loss_total.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), CLIP_NORM)
-                optimizer.step()
+            loss_total = (1.0 - pde_weight) * loss_data + pde_weight * (loss_phys + loss_scheme + loss_energy)
 
+            # backward
+            loss_total.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), CLIP_NORM)
+            optimizer.step()
             scheduler.step()
 
-            # --- always compute debug terms from current batch prediction ---
+            # debug terms
             debug_ut, debug_mu = _debug_terms(u_in_last, y_pred)
 
-            # --- accumulators ---
+            # accumulators
             data_loss_acc  += loss_data.item()
             phys_loss_acc  += loss_phys.item()
             energy_loss_acc += loss_energy.item()
@@ -234,18 +195,14 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
             mu_mse_acc     += debug_mu.item()
             n_batches      += 1
 
-        # --- Eval ---
+        # eval
         model.eval()
         with torch.no_grad():
             rels = []
             for x, y in test_loader:
                 x = x.to(device, non_blocking=True)
                 y = y.to(device, non_blocking=True)
-                if amp_allowed:
-                    with autocast('cuda', enabled=True):
-                        y_pred = model(x)
-                else:
-                    y_pred = model(x)
+                y_pred = model(x)
                 rels.append(relative_l2(y_pred, y))
             test_rel = torch.cat(rels, dim=0).mean().item()
 
@@ -257,7 +214,7 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
               f"{test_rel:10.3e} |  {energy_loss_acc:10.3e} |  {scheme_loss_acc:10.3e} | {lr: .2e}")
 
 # ---------------------
-# Evaluation: rollout + stats + 3×len(times) plot
+# Evaluation: rollout
 # ---------------------
 def rollout_autoregressive(model, traj_np, T_in, Nt=100):
     """
@@ -269,7 +226,7 @@ def rollout_autoregressive(model, traj_np, T_in, Nt=100):
     pred[:T_in] = traj_np[:T_in]
     for t in range(T_in-1, Nt):
         x = torch.from_numpy(pred[t-(T_in-1):t+1]).permute(1,2,3,0).unsqueeze(0).to(device)  # (1,S,S,S,T_in)
-        with torch.no_grad(), torch.amp.autocast('cuda', enabled=config.USE_AMP):
+        with torch.no_grad():
             y_hat = model(x).squeeze(0).squeeze(-1).detach().cpu().numpy()
         pred[t+1] = y_hat
     return pred

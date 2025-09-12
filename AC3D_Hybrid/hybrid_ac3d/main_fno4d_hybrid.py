@@ -1,6 +1,6 @@
 import torch, numpy as np, random
 import config
-from networks import FNO4d
+from networks import FNO4d, TNO3d
 from utilities import build_loaders, train_fno_hybrid, evaluate_stats_and_plot
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -17,12 +17,30 @@ def main():
     device = config.DEVICE
     print("Using device:", device)
     print('PDE_WEIGHT is: ', config.PDE_WEIGHT)
+    print('MODEL name is: ', config.MODEL)
     # Model
-    model = FNO4d(
-        modes1=config.MODES, modes2=config.MODES, modes3=config.MODES, modes4_internal=None,
-        width=config.WIDTH, width_q=config.WIDTH_Q, T_in_channels=config.T_IN_CHANNELS,
-        n_layers=config.N_LAYERS
-    ).to(device)
+
+    if config.MODEL == 'FNO4d':
+
+        model = FNO4d(
+            modes1=config.MODES, modes2=config.MODES, modes3=config.MODES, modes4_internal=None,
+            width=config.WIDTH, width_q=config.WIDTH_Q, T_in_channels=config.T_IN_CHANNELS,
+            n_layers=config.N_LAYERS
+        ).to(device)
+
+    else:
+        model = TNO3d(
+            modes1=config.MODES,  # spectral modes in x
+            modes2=config.MODES,  # spectral modes in y
+            modes3=config.MODES,  # spectral modes in z
+            width=config.WIDTH,  # channel width in trunk
+            width_q=config.WIDTH_Q,  # width in the projection MLP (q)
+            width_h=config.WIDTH_H,  # NEW: temporal memory width (will be unused if T_out=1)
+            T_in=config.T_IN_CHANNELS,
+            T_out=1,  # <<< one-step output, keeps utilities unchanged
+            n_layers=config.N_LAYERS
+        ).to(config.DEVICE)
+
     print(f"Params: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
 
     # Data
