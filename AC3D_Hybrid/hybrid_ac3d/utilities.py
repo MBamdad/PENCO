@@ -187,7 +187,7 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
             # ----- physics bundle -----
             if USE_CH:
                 l_fft = scheme_residual_fourier(u_in_last, y_hat)
-                l_mid_norm_ch = physics_residual_midpoint_normalized_ch_direct(u_in_last, y_hat)
+                l_mid_norm = physics_residual_midpoint_normalized_ch_direct(u_in_last, y_hat)
 
                 # teacher (unchanged)
                 u_si1 = semi_implicit_step(u_in_last, config.DT, config.DX, config.EPS2)
@@ -208,7 +208,7 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
 
                 loss_phys = 4e-2 * (
                         1e-1 * l_fft +
-                        2e-2 * l_mid_norm_ch +
+                        2e-2 * l_mid_norm +
                         5e-4 * l_teacher_hm1
                 )
             else:
@@ -238,7 +238,7 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
             # accumulators
             data_loss_acc  += loss_data.item()
             phys_loss_acc  += loss_phys.item()
-            l_mid_norm_ch_cc += l_mid_norm_ch.item()
+            l_mid_norm_ch_cc += l_mid_norm.item()
             energy_loss_acc += loss_energy.item()
             scheme_loss_acc += loss_scheme.item()
             total_loss_acc += loss_total.item()
