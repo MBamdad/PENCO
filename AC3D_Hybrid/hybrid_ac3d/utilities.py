@@ -4,26 +4,17 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from timeit import default_timer
 import config
+import math
 from functions import (
     mu_ac, physics_residual_midpoint, scheme_residual_fourier, loss_mm_projection,
-    semi_implicit_step, energy_penalty, physics_residual_normalized
+    semi_implicit_step, energy_penalty, physics_residual_normalized,
+    physics_guided_update_ch , hminus1_mse ,physics_residual_midpoint_normalized_ch_direct ,
+    physics_guided_update_ch_optimal
 )
+
 import matplotlib
 matplotlib.use('TkAgg')
 
-# ---------------------
-# Debug terms (for logs)
-# ---------------------
-def _debug_terms(u_in_last, y_pred):
-    """Return u_t^2 mean and mu^2 mean for logging, regardless of which loss path we used."""
-    dt, dx, eps2 = config.DT, config.DX, config.EPS2
-    up = y_pred.squeeze(-1)
-    u0 = u_in_last.squeeze(-1)
-    ut = (up - u0) / dt
-    mu = mu_ac(up, dx, eps2, dealias=True)
-    debug_ut = ut.pow(2).mean()
-    debug_mu = config.DEBUG_MU_SCALE * mu.pow(2).mean()
-    return debug_ut, debug_mu
 
 # ---------------------
 # Dataset: load chosen trajectories into RAM ONCE
@@ -90,15 +81,39 @@ def make_windowed_collate(T_in=4, t_min=None, t_max=None, normalized=False, norm
 # ---------------------
 def build_loaders():
     rng = np.random.default_rng(config.SEED)
-    all_ids = np.arange(600)
+
+    # --- read Ns from the file (last dim of phi: (Nz,Ny,Nx,Nt,Ns)) ---
+    with h5py.File(config.MAT_DATA_PATH, "r") as f:
+        Ns = int(f["phi"].shape[-1])
+
+    # ids = 0..Ns-1, shuffled
+    all_ids = np.arange(Ns)
     rng.shuffle(all_ids)
 
+    # --- clamp splits so they sum to Ns and never go negative ---
+    n_train_req = int(config.N_TRAIN)
+    n_test_req  = int(config.N_TEST)
+
+    n_train = min(max(0, n_train_req), Ns)                 # 0..Ns
+    # try to keep requested test size, but not beyond remaining
+    n_test  = min(max(1, n_test_req), max(0, Ns - n_train))  # at least 1 if possible
+    # if there isn't room for a test set (e.g., Ns==1), force n_test=0 and shrink n_train
+    if n_test == 0 and Ns >= 1:
+        n_train = max(0, Ns - 1)
+        n_test  = 1
+
+    n_unused = Ns - n_train - n_test
+    assert n_unused >= 0, "Split sizes exceed dataset size."
+
+    # build the base dataset over ALL ids so RAM loader knows Ns
     base = AC3DTrajectoryDataset(config.MAT_DATA_PATH, all_ids)
-    # your exact split style:
+
+    # split into train/test/unused
     train_dataset, test_dataset, _ = random_split(
-        base, [config.N_TRAIN, config.N_TEST, len(base)-config.N_TRAIN-config.N_TEST],
+        base, [n_train, n_test, n_unused],
         generator=torch.Generator().manual_seed(config.SEED)
     )
+
     normalizers = [base.normalizer_x, base.normalizer_y]
 
     collate = make_windowed_collate(
@@ -112,8 +127,10 @@ def build_loaders():
     test_loader = DataLoader(test_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
                              num_workers=2, pin_memory=True, persistent_workers=True,
                              collate_fn=collate)
-    # keep test ids for evaluation
-    test_indices = [all_ids[i] for i in range(config.N_TRAIN, config.N_TRAIN+config.N_TEST)]
+
+    # deterministic list of test IDs (after the train split)
+    test_indices = all_ids[n_train:n_train + n_test].tolist()
+
     return train_loader, test_loader, test_indices, normalizers
 
 # ---------------------
@@ -129,19 +146,22 @@ def relative_l2(a, b, eps=1e-12):
 # ---------------------
 # Training: hybrid
 # ---------------------
+## Correct
 def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, device, pde_weight=None):
     pde_weight = config.PDE_WEIGHT if pde_weight is None else pde_weight
 
-    # physics term weights (as in the good baseline)
-    w_mid, w_fft, w_mm = 1.0, 1.0, 1.0
+    # physics term weights (baseline-compatible)
+    USE_CH = (config.PROBLEM == 'CH3D')
+    w_mid, w_fft = 1.0, 1.0
+    w_mm = 0.0 if USE_CH else 1.0  # CH: disable MM; AC: unchanged
     MID_NORM_MIX = 0.5
     CLIP_NORM = 1.0
 
-    print("Epoch |   Time   | DataLoss | PhysLoss | TotalLoss | u_t Term | μ_spatial Term | Test relL2 | energy_loss | scheme_loss | LR")
+    print("Epoch |   Time   | DataLoss | PhysLoss | TotalLoss | Test relL2 | energy_loss | scheme_loss | l_mid_norm_ch_cc | LR")
     for ep in range(config.EPOCHS):
         model.train()
         t1 = default_timer()
-        data_loss_acc = phys_loss_acc = total_loss_acc = 0.0
+        data_loss_acc = phys_loss_acc = total_loss_acc = l_mid_norm_ch_cc = 0.0
         energy_loss_acc = scheme_loss_acc = 0.0
         ut_mse_acc = mu_mse_acc = 0.0
         n_batches = 0
@@ -155,44 +175,73 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
 
             # forward
             y_pred = model(x)
+            y_hat = y_pred
+
+
+            # ---- data term (keep your scaling so behavior remains stable) ----
             if pde_weight == 0:
-                loss_data = 1e0 * F.mse_loss(y_pred, y)
+                loss_data = 1.0 * F.mse_loss(y_pred, y)
             else:
-                loss_data = 1e4 * F.mse_loss(y_pred, y) # make balance by physics loss
+                loss_data = 1e2 * F.mse_loss(y_pred, y)
 
-            # physics bundle
-            l_mid_plain = physics_residual_midpoint(u_in_last, y_pred)
-            l_mid_norm, _, _ = physics_residual_normalized(u_in_last, y_pred)
-            l_mid = (1.0 - MID_NORM_MIX) * l_mid_plain + MID_NORM_MIX * l_mid_norm
+            # ----- physics bundle -----
+            if USE_CH:
+                l_fft = scheme_residual_fourier(u_in_last, y_hat)
+                l_mid_norm_ch = physics_residual_midpoint_normalized_ch_direct(u_in_last, y_hat)
 
-            l_fft = scheme_residual_fourier(u_in_last, y_pred)
-            l_mm, l_proj_dbg, l_stat_dbg = loss_mm_projection(u_in_last, y_pred)
-            loss_phys = 1e-4 * (w_mid*l_mid + w_fft*l_fft + w_mm*l_mm)
+                # teacher (unchanged)
+                u_si1 = semi_implicit_step(u_in_last, config.DT, config.DX, config.EPS2)
+                loss_scheme1 = F.mse_loss(y_hat, u_si1)
 
-            # teacher & energy
-            u_si = semi_implicit_step(u_in_last, config.DT, config.DX, config.EPS2)
-            loss_scheme = F.mse_loss(y_pred, u_si)
+                with torch.no_grad():
+                    u_si2 = semi_implicit_step(u_si1, config.DT, config.DX, config.EPS2)
+                x2 = torch.cat([x[..., 1:], y_hat], dim=-1)  # <-- use y_hat
+                y_hat2 = model(x2)
+                # also pass through PGU for the second step so the scheme loss sees physics-consistent outputs
+                if USE_CH:
+                    y_hat2 = physics_guided_update_ch(y_hat, y_hat2, alpha=0.3, tau=0.3)
+                loss_scheme2 = F.mse_loss(y_hat2, u_si2)
+                loss_scheme = 0.7 * loss_scheme1 + 0.3 * loss_scheme2
+
+                up = y_hat.squeeze(-1)
+                l_teacher_hm1 = hminus1_mse(up, u_si1.squeeze(-1), config.DX)
+
+                loss_phys = 4e-2 * (
+                        1e-1 * l_fft +
+                        2e-2 * l_mid_norm_ch +
+                        5e-4 * l_teacher_hm1
+                )
+            else:
+                # (your existing non-CH path unchanged)
+                l_mid_plain = physics_residual_midpoint(u_in_last, y_pred)
+                l_mid_norm, _, _ = physics_residual_normalized(u_in_last, y_pred)
+                l_mid = 0.5 * l_mid_plain + 0.5 * l_mid_norm
+                l_fft = scheme_residual_fourier(u_in_last, y_pred)
+                l_mm, l_proj_dbg, l_stat_dbg = loss_mm_projection(u_in_last, y_pred)
+
+                loss_phys = 1e-5 * (w_mid * l_mid + w_fft * l_fft + w_mm * l_mm)
+
+                u_si = semi_implicit_step(u_in_last, config.DT, config.DX, config.EPS2)
+                loss_scheme = F.mse_loss(y_pred, u_si)
+
             loss_energy = 0.05 * energy_penalty(u_in_last, y_pred, config.DX, config.EPS2)
 
+            # ---- total loss (unchanged structure) ----
             loss_total = (1.0 - pde_weight) * loss_data + pde_weight * (loss_phys + loss_scheme + loss_energy)
 
             # backward
             loss_total.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), CLIP_NORM)
             optimizer.step()
-            scheduler.step()
 
-            # debug terms
-            debug_ut, debug_mu = _debug_terms(u_in_last, y_pred)
 
             # accumulators
             data_loss_acc  += loss_data.item()
             phys_loss_acc  += loss_phys.item()
+            l_mid_norm_ch_cc += l_mid_norm_ch.item()
             energy_loss_acc += loss_energy.item()
             scheme_loss_acc += loss_scheme.item()
             total_loss_acc += loss_total.item()
-            ut_mse_acc     += debug_ut.item()
-            mu_mse_acc     += debug_mu.item()
             n_batches      += 1
 
         # eval
@@ -206,12 +255,12 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
                 rels.append(relative_l2(y_pred, y))
             test_rel = torch.cat(rels, dim=0).mean().item()
 
+        scheduler.step()
         t2 = default_timer()
         lr = optimizer.param_groups[0]['lr']
         print(f"{ep:5d} | {t2-t1:7.3f} | "
               f"{data_loss_acc/n_batches:8.3e} | {phys_loss_acc/n_batches:8.3e} | {total_loss_acc/n_batches:9.3e} | "
-              f"{(ut_mse_acc/n_batches):8.3e} | {(mu_mse_acc/n_batches):14.3e} | "
-              f"{test_rel:10.3e} |  {energy_loss_acc:10.3e} |  {scheme_loss_acc:10.3e} | {lr: .2e}")
+              f"{test_rel:10.3e} |  {energy_loss_acc:10.3e} |  {scheme_loss_acc:10.3e} | {l_mid_norm_ch_cc:10.3e} | {lr: .2e}")
 
 # ---------------------
 # Evaluation: rollout
@@ -227,8 +276,11 @@ def rollout_autoregressive(model, traj_np, T_in, Nt=100):
     for t in range(T_in-1, Nt):
         x = torch.from_numpy(pred[t-(T_in-1):t+1]).permute(1,2,3,0).unsqueeze(0).to(device)  # (1,S,S,S,T_in)
         with torch.no_grad():
-            y_hat = model(x).squeeze(0).squeeze(-1).detach().cpu().numpy()
-        pred[t+1] = y_hat
+            y_next = model(x)
+            if config.PROBLEM == 'CH3D':
+                y_next = physics_guided_update_ch_optimal(x[..., -1:], y_next, tau=0.3, alpha_cap=0.6)
+            y_np = y_next.squeeze(0).squeeze(-1).detach().cpu().numpy()
+        pred[t + 1] = y_np
     return pred
 
 def relative_l2_scalar(a, b, eps=1e-12):
