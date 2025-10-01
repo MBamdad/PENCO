@@ -88,6 +88,42 @@ def _relative_l2_vs_time(model, mat_path, test_ids, T_in, Nt):
     rel = rel_sum / max(cnt, 1)
     return _asF32F(rel)
 
+def _relative_l2_vs_time_stats(model, mat_path, test_ids, T_in, Nt):
+    """
+    Returns per-time-step statistics of relative L2 error across the test set:
+    mean, std, q1, median, q3, plus the time-step index vector [0..Nt].
+    """
+    import h5py
+    per_sample = []
+    with h5py.File(mat_path, "r") as f:
+        dset = f["phi"]  # (Nz,Ny,Nx,Nt,Ns)
+        for sid in test_ids:
+            raw = np.array(dset[:, :, :, :, int(sid)], dtype=np.float32)
+            gt  = np.transpose(raw, (3, 2, 1, 0))                  # (Nt,S,S,S)
+            pred = rollout_autoregressive(model, gt, T_in, Nt=Nt)  # (Nt,S,S,S)
+            e = np.empty(Nt + 1, dtype=np.float64)
+            for t in range(Nt + 1):
+                num = np.linalg.norm(pred[t].ravel() - gt[t].ravel())
+                den = np.linalg.norm(gt[t].ravel()) + 1e-12
+                e[t] = num / den
+            per_sample.append(e)
+
+    if len(per_sample) == 0:
+        per_sample = np.zeros((1, Nt + 1), dtype=np.float64)
+    else:
+        per_sample = np.stack(per_sample, axis=0)  # (Ns, Nt+1)
+
+    stats = {
+        'time_steps': np.arange(Nt + 1, dtype=np.int32),
+        'mean':   per_sample.mean(axis=0).astype(np.float32),
+        'std':    per_sample.std(axis=0, ddof=0).astype(np.float32),
+        'q1':     np.quantile(per_sample, 0.25, axis=0).astype(np.float32),
+        'median': np.quantile(per_sample, 0.50, axis=0).astype(np.float32),
+        'q3':     np.quantile(per_sample, 0.75, axis=0).astype(np.float32),
+    }
+    return stats
+
+
 def _collect_frames_and_volumes(model, mat_path, test_id, frames, T_in, Nt, downsample=1):
     import h5py
     with h5py.File(mat_path, "r") as f:
@@ -321,6 +357,26 @@ def main():
                     }
                 }, ckpt_path)
 
+                #####
+                #####
+
+                # ---- METRICS & FRAMES (reuse utilities rollout for identical eval) ----
+                relL2_vs_time = _relative_l2_vs_time(
+                    model, CFG.MAT_DATA_PATH, test_ids,
+                    T_in=CFG.T_IN_CHANNELS, Nt=CFG.TOTAL_TIME_STEPS
+                )
+
+                # ---- NEW: per-time-step error statistics across the test set ----
+                rel_stats = _relative_l2_vs_time_stats(
+                    model, CFG.MAT_DATA_PATH, test_ids,
+                    T_in=CFG.T_IN_CHANNELS, Nt=CFG.TOTAL_TIME_STEPS
+                )
+
+                pred_slices, exact_slices, pred_vols, exact_vols = _collect_frames_and_volumes(
+                    model, CFG.MAT_DATA_PATH, rep_test_id, TIME_FRAMES,
+                    T_in=CFG.T_IN_CHANNELS, Nt=CFG.TOTAL_TIME_STEPS, downsample=VOLUME_DOWNSAMPLE
+                )
+
                 # ---- PACK SCENARIO ----
                 scenarios.append({
                     'model': model_name,
@@ -328,16 +384,27 @@ def main():
                     'pde_weight': float(pw),
                     'N_TRAIN': int(CFG.N_TRAIN),
                     'epochs': int(CFG.EPOCHS),
-                    # training curves (for Loss vs Epoch figure)
+
+                    # training curves (unchanged)
                     'data_loss': logs['data_loss'],
                     'phys_loss': logs['phys_loss'],
                     'energy_loss': logs['energy_loss'],
                     'scheme_loss': logs['scheme_loss'],
                     'total_loss': logs['total_loss'],
                     'test_relL2': logs['test_relL2'],
-                    # rel. L2 vs time (for requested TIME_FRAMES you can subset in MATLAB)
+
+                    # mean rel. L2 vs time (unchanged)
                     'relL2_vs_time': relL2_vs_time,
-                    # frames & volumes
+
+                    # >>> NEW: error-statistics curves for shaded plot <<<
+                    'relL2_stats_time_steps': rel_stats['time_steps'],
+                    'relL2_stats_mean': _asF32F(rel_stats['mean']),
+                    'relL2_stats_std': _asF32F(rel_stats['std']),
+                    'relL2_stats_q1': _asF32F(rel_stats['q1']),
+                    'relL2_stats_median': _asF32F(rel_stats['median']),
+                    'relL2_stats_q3': _asF32F(rel_stats['q3']),
+
+                    # frames & volumes (unchanged)
                     'phase_pred_slices': pred_slices,
                     'phase_exact_slices': exact_slices,
                     'time_frames_idx': _asF32F(np.array(TIME_FRAMES, dtype=np.int32)),
