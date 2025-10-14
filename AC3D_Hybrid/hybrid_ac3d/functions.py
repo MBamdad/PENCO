@@ -100,30 +100,212 @@ def spec_high_energy(u, frac_cut=0.6):
     return energy.mean().to(u.dtype)
 
 
+# --- exact MATLAB-matched CH semi-implicit step (double precision internal) ---
 def _semi_implicit_step_ch(u_in, dt, dx, eps, stab_coef=2.0, use_dealias=False):
     """
-    CH3D teacher matching your MATLAB generator:
-      û^{n+1} = [ û^n - dt * k^2 * ( (u^n)^3 - 3u^n )^ ] / [ 1 + dt * (stab_coef*k^2 + eps^2*k^4) ]
-    where stab_coef = 2.0 in your .m file.
-    No dealiasing here to mirror the dataset.
+    CH3D teacher step, arithmetic matched to the MATLAB generator:
+      s_hat = FFT(u^n) - dt * k^2 * FFT( (u^n)^3 - 3 u^n )
+      u_hat^{n+1} = s_hat / (1 + dt * (2 k^2 + eps^2 k^4))
+    Notes:
+      - internal math in float64 for reproducibility
+      - k-grid uses the same [0:N/2, -N/2+1:-1] convention as MATLAB
+      - no dealiasing (dataset has none)
+    """
+    assert config.PROBLEM == 'CH3D'
+    u0 = u_in.squeeze(-1)
+    B, S, _, _ = u0.shape
+
+    # work in float64 to reduce roundoff; cast back on return
+    u0w = u0.to(torch.float64)
+
+    # MATLAB-consistent physical k-grid
+    k2, k4 = _kgrid(S, dx, u0w.device)
+    k2 = k2.to(torch.float64); k4 = k4.to(torch.float64)
+
+    # chemistry at u^n (dataset)
+    chem0w = (u0w * u0w * u0w) - 3.0 * u0w
+
+    u0_hat   = torch.fft.fftn(u0w,   dim=(1,2,3))
+    chem0_hat= torch.fft.fftn(chem0w,dim=(1,2,3))
+
+    s_hat  = u0_hat - dt * k2 * chem0_hat
+    denom  = 1.0 + dt * (2.0 * k2 + (eps * eps) * k4)
+
+    u1_hat = s_hat / denom
+    u1     = torch.fft.ifftn(u1_hat, dim=(1,2,3)).real
+
+    return u1.to(u_in.dtype).unsqueeze(-1)
+
+import torch
+import torch.fft as tfft
+import math
+
+def _kx_grid(S, dx, device, dtype):
+    # physical-size L = S*dx; match MATLAB’s 2π/L * [0..S/2, -S/2+1..-1]
+    L = S * dx
+    half = S // 2
+    kvec = torch.cat([
+        torch.arange(0, half + 1, device=device),
+        torch.arange(-half + 1, 0, device=device)
+    ], dim=0).to(dtype)
+    return (2.0 * math.pi / L) * kvec  # (S,)
+
+def semi_implicit_step_sh(u_in, dt, dx, eps):
+    """
+    One semi-implicit Swift–Hohenberg step that mirrors your MATLAB:
+      s_hat = FFT(u/dt) - FFT(u^3) + 2 * (kxx+kyy+kzz) * FFT(u)
+      v_hat = s_hat / (1/dt + (1 - eps) + (kxx+kyy+kzz)^2)
+      u^{n+1} = IFFT(v_hat)
+    Inputs:
+      u_in: (B,S,S,S,1)  real
+      dt, dx: scalars (float)
+      eps: your config.EPSILON_PARAM (same as MATLAB 'epsilon', not eps^2)
+    Returns:
+      (B,S,S,S,1)
+    """
+    assert u_in.ndim == 5 and u_in.shape[-1] == 1
+    u = u_in.squeeze(-1)
+
+    B, Sx, Sy, Sz = u.shape
+    device, dtype = u.device, u.dtype
+
+    kx = _kx_grid(Sx, dx, device, dtype)
+    ky = _kx_grid(Sy, dx, device, dtype)
+    kz = _kx_grid(Sz, dx, device, dtype)
+    kxx = kx**2; kyy = ky**2; kzz = kz**2
+    Kxx, Kyy, Kzz = torch.meshgrid(kxx, kyy, kzz, indexing='ij')
+    K2 = (Kxx + Kyy + Kzz)  # (S,S,S)
+
+    U   = tfft.fftn(u, dim=(1,2,3))
+    S1  = tfft.fftn(u / dt, dim=(1,2,3))
+    Nl  = tfft.fftn(u**3,  dim=(1,2,3))
+    s_hat = S1 - Nl + 2.0 * K2 * U
+
+    denom = (1.0/dt) + (1.0 - float(eps)) + (K2**2)
+    v_hat = s_hat / denom
+    up = tfft.ifftn(v_hat, dim=(1,2,3)).real
+    return up.unsqueeze(-1)
+
+
+def _semi_implicit_step_sh(u_in, dt, dx, eps):
+    """
+    SH3D teacher step (matches MATLAB):
+      û^{n+1} = [ (1/dt) û^n - FFT((u^n)^3) + 2 k^2 û^n ] / [ 1/dt + (1-ε) + k^4 ]
+    Notes:
+      - no dealiasing on u^3 (to match the generator)
+      - k^2 = (2π/L)^2 |k|^2 from _k_spectrum(...)
     """
     u0 = u_in.squeeze(-1).float()
     B, S, _, _ = u0.shape
-    k2 = _k_spectrum(S, S, S, dx, u0.device)      # (S,S,S)
-    k4 = k2**2
+    k2 = _k_spectrum(S, S, S, dx, u0.device)     # (2π/L)^2 |k|^2
+    k4 = k2 * k2
 
-    # nonlinearity exactly as in MATLAB (no dealias)
-    chem0 = (u0**3 - 3.0*u0)
+    u0_hat = torch.fft.fftn(u0, dim=(1,2,3))
+    u3_hat = torch.fft.fftn(u0**3, dim=(1,2,3))  # no dealias (dataset)
 
-    u0_hat   = torch.fft.fftn(u0,   dim=(1,2,3))
-    chem0_hat= torch.fft.fftn(chem0,dim=(1,2,3))
+    denom  = (1.0/dt) + (1.0 - eps) + k4
+    numer  = (1.0/dt) * u0_hat - u3_hat + 2.0 * k2 * u0_hat
 
-    rhs_hat  = u0_hat - dt * k2 * chem0_hat
-    den      = (1.0 + dt * (stab_coef * k2 + (eps**2) * k4))
-    u1_hat   = rhs_hat / den
-    u1       = torch.fft.ifftn(u1_hat, dim=(1,2,3)).real
-    return u1.unsqueeze(-1)
+    u1_hat = numer / denom
+    u1     = torch.fft.ifftn(u1_hat, dim=(1,2,3)).real
+    return u1.unsqueeze(-1).to(u_in.dtype)
 
+'''''
+def physics_guided_update_sh_optimal(u_in, y_pred, alpha_cap=1.0):
+    """
+    SH3D ONLY.
+    Find alpha* that minimizes the semi-implicit teacher residual (in Fourier)
+    along the line: u_alpha = up + alpha (u_si - up), alpha in [0, alpha_cap].
+    Returns blended field with stop-on-mass (no mass constraint for SH).
+    """
+    assert config.PROBLEM == 'SH3D'
+    dt, dx, eps = config.DT, config.DX, config.EPSILON_PARAM
+
+    u0  = u_in.squeeze(-1).float()
+    up  = y_pred.squeeze(-1).float()
+    usi = semi_implicit_step_sh(u_in, dt, dx, eps).squeeze(-1).float()
+
+    B, S, _, _ = up.shape
+    k2 = _k_spectrum(S, S, S, dx, up.device)
+    k4 = k2 * k2
+
+    u0_hat  = torch.fft.fftn(u0, dim=(1,2,3))
+    up_hat  = torch.fft.fftn(up, dim=(1,2,3))
+    usi_hat = torch.fft.fftn(usi, dim=(1,2,3))
+    u3_hat  = torch.fft.fftn(u0**3, dim=(1,2,3))  # dataset-consistent: no dealias
+
+    denom   = (1.0/dt) + (1.0 - eps) + k4
+    rhs_hat = (1.0/dt) * u0_hat - u3_hat + 2.0 * k2 * u0_hat
+
+    r0_hat = denom * up_hat  - rhs_hat           # residual at alpha=0
+    a_hat  = denom * (usi_hat - up_hat)          # direction
+
+    # weighted LS in Fourier (Parseval), same spirit as scheme_residual
+    w = 1.0 / (denom + 1e-12)                   # preconditioning to avoid high-k domination
+    def wdot(A, B):
+        return (w * (A.real*B.real + A.imag*B.imag)).sum(dim=(1,2,3))
+
+    with torch.no_grad():
+        c1 = wdot(r0_hat, a_hat)                                        # (B,)
+        c2 = (w * (a_hat.real**2 + a_hat.imag**2)).sum((1,2,3)) + 1e-24 # (B,)
+        alpha_star = (-c1 / c2).clamp(0.0, alpha_cap).view(B,1,1,1)
+
+    u_blend = up + alpha_star * (usi - up)
+    return u_blend.unsqueeze(-1).to(y_pred.dtype)
+'''
+
+def low_k_mse(u_pred, u_ref, frac=0.45):
+    """
+    MSE between u_pred and u_ref restricted to low spatial frequencies.
+    Shapes: (B,S,S,S,1).
+    """
+    up = u_pred.squeeze(-1).float()
+    ur = u_ref.squeeze(-1).float()
+    B, S, _, _ = up.shape
+
+    Up = torch.fft.fftn(up, dim=(1,2,3))
+    Ur = torch.fft.fftn(ur, dim=(1,2,3))
+
+    fx = torch.fft.fftfreq(S, d=1.0).to(up.device)
+    fy = torch.fft.fftfreq(S, d=1.0).to(up.device)
+    fz = torch.fft.fftfreq(S, d=1.0).to(up.device)
+    FX, FY, FZ = torch.meshgrid(fx, fy, fz, indexing='ij')
+    r = torch.sqrt(FX*FX + FY*FY + FZ*FZ)
+    rmax = r.max()
+    mask = (r <= frac * rmax).to(Up.real.dtype)
+
+    Dh = Up - Ur
+    spec_mse = (Dh.real**2 + Dh.imag**2) * mask
+    # normalize by # of active modes to keep scale stable across S
+    denom = mask.sum().clamp_min(1.0)
+    return spec_mse.sum() / denom
+
+
+# --- CH projection with mixed chemistry (uses the same MATLAB-matched kernel) ---
+def si_projection_ch_mixed(u_in, u_pred, dt, dx, eps, tau=0.5):
+    """
+    Semi-implicit projection using mixed chemistry:
+      u_m = (1-τ) u^n + τ u^{n+1}_pred
+      û^{n+1}_proj = [ û^n - dt * k^2 * FFT( u_m^3 - 3 u_m ) ] / [ 1 + dt (2 k^2 + eps^2 k^4) ]
+    Computed in float64 with MATLAB k-grid; no dealiasing (to match dataset).
+    """
+    assert config.PROBLEM == 'CH3D'
+    u0 = u_in.squeeze(-1).to(torch.float64)
+    up = u_pred.squeeze(-1).to(torch.float64)
+    um = (1.0 - tau) * u0 + tau * up
+
+    B, S, _, _ = u0.shape
+    k2, k4 = _kgrid(S, dx, u0.device)
+    k2 = k2.to(torch.float64); k4 = k4.to(torch.float64)
+
+    u0_hat   = torch.fft.fftn(u0, dim=(1,2,3))
+    chem_hat = torch.fft.fftn(um*um*um - 3.0*um, dim=(1,2,3))
+
+    denom  = 1.0 + dt * (2.0 * k2 + (eps * eps) * k4)
+    up_hat = (u0_hat - dt * k2 * chem_hat) / denom
+
+    u_proj = torch.fft.ifftn(up_hat, dim=(1,2,3)).real
+    return u_proj.unsqueeze(-1).to(u_pred.dtype)
 
 
 def _k_vectors(nx, ny, nz, dx, device, dtype=torch.float32):
@@ -320,6 +502,21 @@ def _rhs_pfc3d(u, dx, eps):
     lap_u3 = laplacian_fourier_3d_phys(u_da**3, dx)
     return (1.0 - eps) * lap_u + bi_u + tri_u - lap_u3
 
+def _rhs_sh3d(u, dx, eps):
+    """
+    Swift–Hohenberg (dataset-consistent split):
+        u_t = (1-ε) u - 2 Δ u - Δ^2 u - u^3
+    NOTE:
+      • NO dealiasing on u^3 (matches the MATLAB generator).
+      • Clamp inside the cubic to avoid overflow when the net overshoots early.
+    """
+    lap_u = laplacian_fourier_3d_phys(u, dx)     # Δu
+    bi_u  = biharmonic(u, dx)                    # Δ^2 u
+    u_safe = torch.clamp(u, -5.0, 5.0)           # safe cubic; no in-place to keep graph
+    return (1.0 - eps) * u - 2.0 * lap_u - bi_u - (u_safe ** 3)
+
+
+
 def pde_rhs(u, dx, eps_param):
     """
     Generic RHS(u) for the active problem such that u_t = RHS(u).
@@ -329,8 +526,8 @@ def pde_rhs(u, dx, eps_param):
         return _rhs_ac3d(u, dx, config.EPS2)
     elif P == 'CH3D':
         return _rhs_ch3d(u, dx, eps_param)
-    #elif P == 'SH3D':
-    #    return _rhs_sh3d(u, dx, eps_param)
+    elif P == 'SH3D':
+        return _rhs_sh3d(u, dx, eps_param)
     elif P == 'MBE3D':
         return _rhs_mbe3d(u, dx, eps_param)
     elif P == 'PFC3D':
@@ -415,6 +612,9 @@ def semi_implicit_step(u_in, dt, dx, eps2):
         return u1.unsqueeze(-1)
     elif config.PROBLEM == 'CH3D':
         return _semi_implicit_step_ch(u_in, dt, dx, eps=np.sqrt(eps2), stab_coef=2.0, use_dealias=False)
+    elif P == 'SH3D':  # <-- NEW
+        return _semi_implicit_step_sh(u_in, dt, dx, eps=config.EPSILON_PARAM)
+
     else:
         # fallback (unchanged) explicit Euler
         u0 = u_in.squeeze(-1)
@@ -519,6 +719,28 @@ def scheme_residual_fourier(u_in, u_pred):
         # Parseval: ||R||^2 ~ sum |R^|^2. Use mean to keep scale stable.
         r2 = rhat.real**2 + rhat.imag**2
         return r2.mean()
+    if config.PROBLEM == 'SH3D':  # <-- NEW
+        B, S, _, _ = u0.shape
+        k2 = _k_spectrum(S, S, S, dx, u0.device)
+        k4 = k2 * k2
+
+        u0_hat = torch.fft.fftn(u0, dim=(1, 2, 3))
+        up_hat = torch.fft.fftn(up, dim=(1, 2, 3))
+        u3_hat = torch.fft.fftn(u0 ** 3, dim=(1, 2, 3))  # dataset-consistent (no dealias)
+
+        eps = config.EPSILON_PARAM
+        denom = (1.0 / dt) + (1.0 - eps) + k4
+
+        # residual in Fourier of the semi-implicit update
+        rhs_hat = (1.0 / dt) * u0_hat - u3_hat + 2.0 * k2 * u0_hat
+        rhat = denom * up_hat - rhs_hat
+
+        # precondition to avoid high-k domination (same idea as CH)
+        rhat = rhat / (denom + 1e-12)
+
+        r2 = rhat.real ** 2 + rhat.imag ** 2
+        return r2.mean()
+
 
     if config.PROBLEM == 'AC3D':
         u_explicit = u0 + dt * pde_rhs(u0, dx, config.EPSILON_PARAM).float()
@@ -629,6 +851,20 @@ def physics_residual_midpoint_normalized_ch_direct(u_in, u_pred):
     r2 = (Rm_hat.real**2 + Rm_hat.imag**2) * inv_k2
     return torch.sqrt(r2 + 1e-8).mean().to(u_pred.dtype)
 
+def _mid_residual_norm_sh(u_in, u_pred):
+    dt, dx, eps = config.DT, config.DX, config.EPSILON_PARAM
+    u0 = u_in.squeeze(-1).float()
+    up = u_pred.squeeze(-1).float()
+    um = 0.5 * (u0 + up)
+    ut = (up - u0) / dt
+    lap = laplacian_fourier_3d_phys(um, dx)
+    bi = biharmonic(um, dx)
+    rhs = (1.0 - eps) * um - 2.0 * lap - bi - (um ** 3)
+    s_t = ut.pow(2).mean((1, 2, 3), keepdim=True).sqrt().detach() + 1e-8
+    s_r = rhs.pow(2).mean((1, 2, 3), keepdim=True).sqrt().detach() + 1e-8
+    R = ut / s_t - rhs / s_r
+    return (R ** 2).mean()
+
 
 ##
 ##############
@@ -678,34 +914,76 @@ def physics_collocation_tau_Hm1_CH_direct(u_in, u_pred, tau=0.5 - 1.0/(2.0*math.
 
     return _hm1_mean(R, dx)  # uses your existing _fft_rk2-based helper
 
-# === NEW: semi-implicit projection using a mixed state (CH3D) ===
-# Uses your dataset’s denominator (2 k^2 + eps^2 k^4) and cubic (no dealias).
-# Given u^n and y_pred, form u_m = (1-τ)u^n + τ y_pred, then solve the SI step
-#   u^{n+1}_proj = [ u^n - dt * k^2 * FFT( (u_m^3 - 3 u_m) ) ] / [ 1 + dt (2 k^2 + eps^2 k^4) ].
-# τ=0 -> teacher (exact dataset step); τ=0.5 uses midpoint chemistry (lets gradients flow through y_pred).
 
-def si_projection_ch_mixed(u_in, u_pred, dt, dx, eps, tau=0.5):
-    u0 = u_in.squeeze(-1).float()     # (B,S,S,S)
+def physics_collocation_tau_L2_SH(u_in, u_pred,
+                                  tau=0.5 - 1.0/(2.0*math.sqrt(5.0)),
+                                  normalize=True):
+    """
+    SH3D collocation residual at interior time u_tau:
+      R_tau = (u^{n+1}-u^n)/dt - RHS_SH(u_tau)
+    with
+      RHS_SH(u) = (1-ε) u - 2 Δ u - Δ^2 u - u^3
+    Notes:
+      • NO dealiasing on u^3 (matches your MATLAB generator).
+      • Optional per-sample normalization balances ut vs RHS in L2.
+      • Scored in L2 (SH is an L2-type gradient flow).
+    """
+    assert config.PROBLEM == 'SH3D'
+    dt, dx, eps = config.DT, config.DX, config.EPSILON_PARAM
+
+    u0 = u_in.squeeze(-1).float()   # (B,S,S,S)
     up = u_pred.squeeze(-1).float()
-    um = (1.0 - tau) * u0 + tau * up
 
-    B, S, _, _ = u0.shape
-    k2 = _k_spectrum(S, S, S, dx, u0.device)   # (2π/L)^2 |k|^2
-    k4 = k2 * k2
+    ut = (up - u0) / dt
+    u_tau = (1.0 - tau) * u0 + tau * up
 
-    u0_hat   = torch.fft.fftn(u0, dim=(1,2,3))
-    chem_hat = torch.fft.fftn(um**3 - 3.0*um, dim=(1,2,3))
+    # Dataset-consistent SH RHS (no dealias on cubic)
+    lap_u   = laplacian_fourier_3d_phys(u_tau, dx)
+    bi_u    = biharmonic(u_tau, dx)
+    rhs_tau = (1.0 - eps) * u_tau - 2.0 * lap_u - bi_u - (u_tau ** 3)
 
-    denom = 1.0 + dt * (2.0 * k2 + (eps*eps) * k4)
-    up_hat = (u0_hat - dt * k2 * chem_hat) / denom
+    if normalize:
+        s_t = ut.pow(2).mean(dim=(1,2,3), keepdim=True).sqrt().detach() + 1e-8
+        s_r = rhs_tau.pow(2).mean(dim=(1,2,3), keepdim=True).sqrt().detach() + 1e-8
+        R = ut / s_t - rhs_tau / s_r
+    else:
+        R = ut - rhs_tau
 
-    u_proj = torch.fft.ifftn(up_hat, dim=(1,2,3)).real
-    return u_proj.unsqueeze(-1)        # (B,S,S,S,1)
+    return (R ** 2).mean().to(u_pred.dtype)
 
-# === NEW: Physics-Guided Update (PGU) for CH3D ===
-# Uses your dataset’s semi-implicit denominator, with a mixed chemistry state (tau),
-# then blends the physics-consistent state back into the network output by factor alpha.
-# Finally, enforce mass conservation by hard projection.
+def sh_free_energy_density(u, dx, eps):
+    """
+    Per-voxel energy density for Swift–Hohenberg:
+      f_SH(u) = - (1-ε)/2 * u^2  - |∇u|^2  + 1/2 * (Δu)^2  + 1/4 * u^4
+    Uses periodic finite differences for |∇u|^2 and spectral Δ for Δu.
+    Shapes: u (B,S,S,S), returns (B,S,S,S).
+    """
+    # |∇u|^2 with periodic forward diffs (same style as CH helper)
+    grad2 = _periodic_grad2(u, dx)  # already in your file
+
+    # Δu via your spectral Laplacian
+    lap = laplacian_fourier_3d_phys(u, dx)
+
+    bulk_quad  = -0.5 * (1.0 - eps) * (u * u)
+    grad_term  = -grad2
+    bih_term   = 0.5 * (lap * lap)
+    quartic    = 0.25 * (u * u * u * u)
+
+    return (bulk_quad + grad_term + bih_term + quartic)
+
+def energy_penalty_sh(u_in, u_pred, dx, eps):
+    """
+    One-sided hinge on F_SH increase: penalize only if F(u^{n+1}) > F(u^n).
+    Returns a scalar (mean over batch).
+    """
+    u0 = u_in.squeeze(-1)
+    up = u_pred.squeeze(-1)
+    F0 = sh_free_energy_density(u0, dx, eps).mean(dim=(1,2,3))
+    Fp = sh_free_energy_density(up, dx, eps).mean(dim=(1,2,3))
+    inc = torch.relu(Fp - F0)  # only increases are penalized
+    return inc.mean()
+
+
 
 def si_projection_ch_mixed(u_in, u_pred, dt, dx, eps, tau=0.5):
     """
@@ -770,52 +1048,144 @@ def si_projection_ch_mixed(u_in, u_pred, dt, dx, eps, tau=0.5):
     u_proj = torch.fft.ifftn(up_hat, dim=(1,2,3)).real
     return u_proj.unsqueeze(-1).to(u_pred.dtype)
 
-def physics_guided_update_ch_optimal(u_in, y_pred, tau=0.5, alpha_cap=0.6):
+def physics_guided_update_ch_optimal(u_in, y_pred, tau=0.0, alpha_cap=1.0,
+                                     low_k_snap_frac=0.45, use_float64=True):
     """
-    Compute u_proj (semi-implicit step with mixed chemistry), then choose α* in [0, alpha_cap]
-    that MINIMIZES the SI residual (discrete teacher) under H^{-1} weighting:
-        r̂(α) = denom * û^{n+1}(α) - [ û^n - dt k^2 (u^3 - 3u)^n^ ]
-        û^{n+1}(α) = (1-α) û_pred + α û_proj
-    Closed-form α*:  -⟨r0, a⟩_w / ⟨a, a⟩_w  (clamped), where a = denom * (û_proj - û_pred),
-    weighting w = 1/(k^2 + ε0). Returns mass-projected blend.
+    CH3D ONLY.
+    Physics-guided update with *low-k spectral snap* + optimal H^{-1} blend.
+
+    Steps:
+      1) Semi-implicit projection using mixed chemistry (tau) -> u_proj
+      2) In Fourier space, replace all modes with radius <= (low_k_snap_frac * r_max)
+         by those of u_proj (dataset teacher). High-k stay from the net.
+      3) Choose alpha* in [0, alpha_cap] that minimizes the *teacher* residual
+         (semi-implicit) under H^{-1} weighting (as before).
+      4) Mass-project the result to enforce conservation.
+
+    Notes:
+      - Defaults: tau=0.0 (exact dataset chemistry), alpha_cap=1.0 (allow full correction).
+      - Works entirely inside this function; call sites do not need to change.
     """
+    assert config.PROBLEM == 'CH3D', "physics_guided_update_ch_optimal is CH3D-specific."
+
     dt, dx, eps = config.DT, config.DX, config.EPSILON_PARAM
-    u0 = u_in.squeeze(-1).float()
-    up = y_pred.squeeze(-1).float()
 
-    # projection (depends on up via mixed chemistry)
-    u_proj = si_projection_ch_mixed(u_in, y_pred, dt, dx, eps, tau=tau).squeeze(-1).float()
+    # ---- inputs ----
+    u0 = u_in.squeeze(-1)
+    up = y_pred.squeeze(-1)
 
-    B, S, _, _ = u0.shape
-    k2 = _k_spectrum(S, S, S, dx, u0.device)
-    k4 = k2 * k2
-    denom = 1.0 + dt * (2.0 * k2 + (eps*eps) * k4)
+    # higher precision for spectral math (optional)
+    work_dtype = torch.float64 if (use_float64 and up.dtype == torch.float32) else up.dtype
+    u0w = u0.to(work_dtype)
+    upw = up.to(work_dtype)
 
-    # Fourier pieces for SI residual
-    u0_hat    = torch.fft.fftn(u0, dim=(1,2,3))
-    up_hat    = torch.fft.fftn(up, dim=(1,2,3))
+    # 1) dataset-consistent semi-implicit projection (mixed chemistry)
+    u_proj = si_projection_ch_mixed(u_in, y_pred, dt, dx, eps, tau=tau).squeeze(-1).to(work_dtype)
+
+    # 2) low-k spectral snap: replace low-frequency modes by teacher's modes
+    B, S, _, _ = upw.shape
+    up_hat    = torch.fft.fftn(upw,    dim=(1,2,3))
     uproj_hat = torch.fft.fftn(u_proj, dim=(1,2,3))
-    chem0_hat = torch.fft.fftn(u0**3 - 3.0*u0, dim=(1,2,3))  # teacher uses u^n cubic
 
+    fx = torch.fft.fftfreq(S, d=1.0).to(upw.device)
+    fy = torch.fft.fftfreq(S, d=1.0).to(upw.device)
+    fz = torch.fft.fftfreq(S, d=1.0).to(upw.device)
+    FX, FY, FZ = torch.meshgrid(fx, fy, fz, indexing='ij')
+    r = torch.sqrt(FX*FX + FY*FY + FZ*FZ)
+    rmax = r.max()
+    low_mask = (r <= low_k_snap_frac * rmax).to(up_hat.dtype)
+
+    # snap low-k to teacher, keep high-k from the net
+    usnap_hat = low_mask * uproj_hat + (1.0 - low_mask) * up_hat
+    u_snap = torch.fft.ifftn(usnap_hat, dim=(1,2,3)).real  # (B,S,S,S)
+
+    # 3) choose optimal alpha* (H^{-1} teacher residual) between up and u_snap
+    k2 = _k_spectrum(S, S, S, dx, upw.device).to(work_dtype)
+    k4 = k2 * k2
+    denom = 1.0 + dt * (2.0 * k2 + (eps * eps) * k4)
+
+    u0_hat    = torch.fft.fftn(u0w, dim=(1,2,3))
+    chem0_hat = torch.fft.fftn(u0w**3 - 3.0*u0w, dim=(1,2,3))
     const_hat = u0_hat - dt * k2 * chem0_hat
-    r0_hat = denom * up_hat - const_hat                    # residual at α=0
-    a_hat  = denom * (uproj_hat - up_hat)                  # direction when increasing α
+
+    up_hat     = torch.fft.fftn(upw,    dim=(1,2,3))
+    usnap_hat2 = torch.fft.fftn(u_snap, dim=(1,2,3))
+
+    r0_hat = denom * up_hat - const_hat                  # residual at alpha=0
+    a_hat  = denom * (usnap_hat2 - up_hat)               # direction when increasing alpha
 
     # H^{-1} weights
-    _, inv_k2 = _fft_rk2(S, S, S, dx, u0.device, dtype=torch.float32)
+    _, inv_k2 = _fft_rk2(S, S, S, dx, upw.device, dtype=work_dtype)
     w = inv_k2
 
-    # weighted inner-products (per sample)
     def wdot(A, B):
         return (w * (A.real * B.real + A.imag * B.imag)).sum(dim=(1,2,3))
 
     with torch.no_grad():
-        c1 = wdot(r0_hat, a_hat)                                    # shape (B,)
-        c2 = (w * (a_hat.real**2 + a_hat.imag**2)).sum((1,2,3)) + 1e-12
-        alpha_star = (-c1 / c2).clamp(0.0, alpha_cap)               # best blend
-        alpha_star = alpha_star.view(B, 1, 1, 1)
+        c1 = wdot(r0_hat, a_hat)                                          # (B,)
+        c2 = (w * (a_hat.real**2 + a_hat.imag**2)).sum((1,2,3)) + 1e-24   # (B,)
+        alpha_star = (-c1 / c2).clamp(0.0, alpha_cap).view(B, 1, 1, 1)
 
-    y_phys = up + alpha_star * (u_proj - up)                        # (B,S,S,S)
+    y_phys = upw + alpha_star * (u_snap - upw)        # blend back from snapped low-k
     y_phys = y_phys.unsqueeze(-1)
-    y_phys = mass_project_pred(y_phys, u_in)                        # enforce mass
-    return y_phys.to(y_pred.dtype)
+    # 4) enforce mass exactly
+    y_phys = mass_project_pred(y_phys.to(y_pred.dtype), u_in)
+    return y_phys
+
+import torch, math
+import torch.nn.functional as F
+
+def physics_guided_update_sh_optimal(u_in, y_pred, alpha_cap=0.7, low_k_snap_frac=0.48):
+    """
+    SH3D ONLY. Blend y_pred toward the semi-implicit teacher usi with optimal alpha*
+    that MINIMIZES the semi-implicit residual (preconditioned). If the best alpha*
+    would increase residual, do nothing (alpha=0).
+    """
+    assert config.PROBLEM == 'SH3D'
+    dt, dx, eps = config.DT, config.DX, config.EPSILON_PARAM
+
+    u0  = u_in.squeeze(-1).float()
+    up  = y_pred.squeeze(-1).float()
+    usi = semi_implicit_step_sh(u_in, dt, dx, eps).squeeze(-1).float()
+
+    B, S, _, _ = up.shape
+    device = up.device
+    k2 = _k_spectrum(S, S, S, dx, device); k4 = k2 * k2
+    denom = (1.0 / dt) + (1.0 - eps) + k4
+
+    u0_hat  = torch.fft.fftn(u0, dim=(1,2,3))
+    up_hat  = torch.fft.fftn(up, dim=(1,2,3))
+    usi_hat = torch.fft.fftn(usi, dim=(1,2,3))
+    u3_hat  = torch.fft.fftn(u0**3, dim=(1,2,3))
+    rhs_hat = (1.0 / dt) * u0_hat - u3_hat + 2.0 * k2 * u0_hat
+
+    # light low-k snap (improves coherence of large scales)
+    fx = torch.fft.fftfreq(S, d=1.0).to(device)
+    FY, FX, FZ = torch.meshgrid(fx, fx, fx, indexing='ij')
+    r = torch.sqrt(FX*FX + FY*FY + FZ*FZ)
+    mask_low = (r <= low_k_snap_frac * r.max()).to(up_hat.dtype)
+    up_hat = mask_low * usi_hat + (1.0 - mask_low) * up_hat
+
+    r0_hat = denom * up_hat - rhs_hat              # residual at alpha=0
+    a_hat  = denom * (usi_hat - up_hat)            # descent direction toward usi
+    w = 1.0 / (denom + 1e-12)                      # whitening
+
+    def wdot(A, B):
+        return (w * (A.real*B.real + A.imag*B.imag)).sum(dim=(1,2,3))
+
+    with torch.no_grad():
+        c1 = wdot(r0_hat, a_hat)                                     # (B,)
+        c2 = (w * (a_hat.real**2 + a_hat.imag**2)).sum((1,2,3)) + 1e-24
+        alpha_star = (-c1 / c2).clamp(0.0, alpha_cap).view(B,1,1,1)
+
+        # MONOTONE SAFETY: ensure residual does not increase
+        up_blend_hat = up_hat + alpha_star * (usi_hat - up_hat)
+        r_star_hat   = denom * up_blend_hat - rhs_hat
+        # If ⟨r*, r*⟩_w > ⟨r0, r0⟩_w, set alpha to 0
+        r0_w = (w * (r0_hat.real**2 + r0_hat.imag**2)).sum((1,2,3))
+        rs_w = (w * (r_star_hat.real**2 + r_star_hat.imag**2)).sum((1,2,3))
+        bad = (rs_w > r0_w).view(B,1,1,1)
+        alpha_star = torch.where(bad, torch.zeros_like(alpha_star), alpha_star)
+
+    y_blend = up + alpha_star * (usi - up)
+    return y_blend.unsqueeze(-1).to(y_pred.dtype)
