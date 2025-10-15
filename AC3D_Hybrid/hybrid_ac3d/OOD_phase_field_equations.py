@@ -37,14 +37,36 @@ CKPTS_AC3D = {
 CKPTS_CH3D = {
     # method_label: (model_type, path)
     "FNO4d": ("FNO4d",
-              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/FNO4d_FNO4d_N100_pw0.00_E50.pt"),
+              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/FNO4d_FNO4d_N200_pw0.00_E50.pt"),
     "MHNO": ("TNO3d",
-             "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/TNO3d_MHNO_N100_pw0.00_E50.pt"),
-    "PENCO": ("TNO3d",
-              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/TNO3d_PENCO_N100_pw0.75_E50.pt"),
+             "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/TNO3d_MHNO_N200_pw0.00_E50.pt"),
+    # NEW: split PENCO into two variants for CH3D (as in AC3D)
+    "PENCO-MHNO": ("TNO3d",
+                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/TNO3d_PENCO_N200_pw0.75_E50.pt"),
+    "PENCO-FNO": ("FNO4d",
+                  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/FNO4d_PENCO_N200_pw0.75_E50.pt"),
     "PurePhysics": ("TNO3d",
-                    "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/TNO3d_PurePhysics_N100_pw1.00_E50.pt"),
+                    "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/TNO3d_PurePhysics_N200_pw1.00_E50.pt"),
 }
+
+
+# --- Checkpoints for SH3D ---
+CKPTS_SH3D = {
+    # method_label: (model_type, path)
+    "FNO4d": ("FNO4d",
+              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/FNO4d_FNO4d_N50_pw0.00_E50.pt"),
+    "MHNO": ("TNO3d",
+             "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/TNO3d_MHNO_N200_pw0.00_E50.pt"),
+    # NEW: split PENCO into two variants for CH3D (as in AC3D)
+    "PENCO-MHNO": ("TNO3d",
+                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/TNO3d_PENCO_N200_pw0.75_E50.pt"),
+    "PENCO-FNO": ("FNO4d",
+                  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/FNO4d_PENCO_N200_pw0.75_E50.pt"),
+    "PurePhysics": ("TNO3d",
+                    "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/TNO3d_PurePhysics_N200_pw1.00_E50.pt"),
+}
+
+
 
 # --- Dynamic selection based on CFG.PROBLEM ---
 if CFG.PROBLEM == 'AC3D':
@@ -54,12 +76,16 @@ if CFG.PROBLEM == 'AC3D':
     IC_TYPE = 'sphere'
 elif CFG.PROBLEM == 'CH3D':
     CKPTS = CKPTS_CH3D
-    METHODS = ["FNO4d", "MHNO", "PENCO", "PurePhysics"]
+    METHODS = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]  # <- now 5 like AC3D
     IC_FUNCTION = 'create_initial_condition_star_ch3d'
     IC_TYPE = 'star'
+elif CFG.PROBLEM == 'SH3D':
+    CKPTS = CKPTS_SH3D
+    METHODS = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]
+    IC_FUNCTION = 'create_initial_condition_sphere_sh3d'
+    IC_TYPE = 'sphere'
 else:
     raise ValueError(f"Problem '{CFG.PROBLEM}' not configured in this script.")
-
 
 # -----------------------------------
 # 2) Initial Conditions
@@ -67,7 +93,7 @@ else:
 def _grid(S, L):
     """Helper to create a 3D grid."""
     x = np.linspace(-0.5 * L, 0.5 * L, S, endpoint=False)
-    y=z=x
+    y = z = x
     return np.meshgrid(x, y, z, indexing="ij")
 
 
@@ -116,6 +142,22 @@ def create_initial_condition_star_ch3d():
 
     return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
 
+def create_initial_condition_sphere_sh3d():
+    """Generates the sphere IC for the SH3D problem (identical profile to AC)."""
+    S = CFG.GRID_RESOLUTION
+    L = CFG.L_DOMAIN
+    epsilon = CFG.EPSILON_PARAM
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
+    selected_frames = [0, 20, 40, 60, 80, 100]
+
+    # identical sphere parameters across methods for a fair comparison
+    R = 0.5  # radius in domain units (match AC's value)
+    xx, yy, zz = _grid(S, L)
+    w = np.sqrt(2.0) * epsilon  # interface width
+    u0 = np.tanh((R - np.sqrt(xx**2 + yy**2 + zz**2)) / w).astype(np.float32)
+
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
 
 # ----------------------------------------------------
 # 3) Model Loading
@@ -143,7 +185,6 @@ def load_model(method: str, model_type: str, device: torch.device):
     model.eval()
     return model
 
-
 # -----------------------------------------------------------
 # 4) Bootstrap T_in window with semi-implicit teacher
 # -----------------------------------------------------------
@@ -156,7 +197,6 @@ def bootstrap_states_from_u0(u0_np: np.ndarray, T_in: int, device: torch.device)
         states.append(u)
     x0 = torch.cat(states, dim=-1)
     return states, x0
-
 
 # -----------------------------------------------------------
 # 5) Rollout autoregressively
@@ -175,7 +215,6 @@ def rollout_aligned(model, x0: torch.Tensor, teacher_states: list, Nt: int):
 
     return np.stack(seq, axis=0).astype(np.float32)
 
-
 # -----------------------------------------------------------
 # 6) High-quality 3D plotting
 # -----------------------------------------------------------
@@ -186,19 +225,19 @@ def plot_isosurface_grid(volumes_by_method, method_order, frames, out_png, out_p
     fig = plt.figure(figsize=(4.8 * n_cols, 4.2 * n_rows))
     plt.subplots_adjust(left=0.07, right=0.98, top=0.90, bottom=0.05, wspace=0.05, hspace=0.05)
 
-    # ... (rest of the plotting function remains the same, it is already general)
-    # Note: You might want to customize the facecolor_map if methods change
+    # Colors
     facecolor_map = {
         "FNO4d": (1.00, 0.10, 0.10, 1.0),
         "MHNO": (0.95, 0.20, 0.20, 1.0),
         "PENCO-MHNO": (0.10, 0.90, 0.10, 1.0),
         "PENCO-FNO": (0.95, 0.50, 0.15, 1.0),
-        "PENCO": (0.10, 0.90, 0.10, 1.0),  # Same color as PENCO-MHNO
+        "PENCO": (0.10, 0.90, 0.10, 1.0),
         "PurePhysics": (0.05, 0.95, 0.05, 1.0),
     }
 
     def _tighten_axes(ax, verts, pad=pad_vox):
-        if verts.size == 0: return
+        if verts.size == 0:
+            return
         mins, maxs = verts.min(axis=0), verts.max(axis=0)
         ax.set_xlim(mins[2] - pad, maxs[2] + pad)
         ax.set_ylim(mins[1] - pad, maxs[1] + pad)
@@ -210,7 +249,7 @@ def plot_isosurface_grid(volumes_by_method, method_order, frames, out_png, out_p
         for c, t in enumerate(frames):
             ax = fig.add_subplot(n_rows, n_cols, plot_idx, projection='3d')
             plot_idx += 1
-            ax.set_facecolor('white');
+            ax.set_facecolor('white')
             ax.grid(False)
 
             vol_zyx = np.transpose(vols[t], (2, 1, 0))
@@ -219,7 +258,7 @@ def plot_isosurface_grid(volumes_by_method, method_order, frames, out_png, out_p
 
             try:
                 verts, faces, _, _ = marching_cubes(vol_zyx, level=0.0)
-                rgba = facecolor_map[method]
+                rgba = facecolor_map.get(method, (0.5, 0.5, 0.5, 1.0))
                 mesh = Poly3DCollection(verts[faces], alpha=rgba[3], facecolor=rgba, edgecolor='none')
                 ax.add_collection3d(mesh)
                 _tighten_axes(ax, verts, pad=pad_vox)
@@ -228,10 +267,10 @@ def plot_isosurface_grid(volumes_by_method, method_order, frames, out_png, out_p
 
             if r == 0:
                 ax.set_title(rf"${t}\,\Delta t$", fontsize=20, fontweight='bold', pad=8)
-            ax.set_xticks([]);
-            ax.set_yticks([]);
+            ax.set_xticks([])
+            ax.set_yticks([])
             ax.set_zticks([])
-            ax.set_box_aspect((1, 1, 1));
+            ax.set_box_aspect((1, 1, 1))
             ax.view_init(elev=22, azim=-60)
 
         fig.text(0.03, 1.0 - (r + 0.5) / n_rows, method, va='center', ha='center',
@@ -241,7 +280,6 @@ def plot_isosurface_grid(volumes_by_method, method_order, frames, out_png, out_p
     plt.savefig(out_pdf, dpi=400, facecolor='white')
     plt.close(fig)
     print(f"Saved comparison figures to: {out_png} and {out_pdf}")
-
 
 # -----------------------------------------------------------
 # 7) Main execution block
@@ -287,7 +325,6 @@ def main():
     )
 
     # --- Save .mat file ---
-    # Prepare data for saving, using method names as keys
     out_data = {
         'meta': {
             'case': f'{CFG.PROBLEM}_{IC_TYPE}',
@@ -301,16 +338,14 @@ def main():
         'teacher_window': np.stack([s.squeeze().cpu().numpy() for s in teacher_states], axis=0),
         'U0': u0_np,
     }
-    # Dynamically add results for each method
+    # Save each method (Matlab-friendly keys)
     for method in METHODS:
-        # Replace hyphen with underscore for MATLAB compatibility
-        matlab_friendly_name = method.replace('-', '_')
+        matlab_friendly_name = method.replace('-', '_')  # e.g., PENCO-MHNO -> PENCO_MHNO
         out_data[matlab_friendly_name] = volumes_by_method[method]
 
     mat_name = f"{CFG.PROBLEM.lower()}_{IC_TYPE}_eval_compare.mat"
     savemat(mat_name, out_data, do_compression=True)
     print(f"Saved MATLAB results to: {mat_name}")
-
 
 if __name__ == "__main__":
     main()
