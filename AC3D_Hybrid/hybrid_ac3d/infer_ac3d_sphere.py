@@ -16,13 +16,13 @@ from functions import semi_implicit_step
 # 1) Paths to your checkpoints
 # -----------------------------
 CKPTS = {
-    "FNO4d":      "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/FNO4d_FNO4d_N200_pw0.00_E50.pt",
-    "MHNO":       "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/TNO3d_MHNO_N200_pw0.00_E50.pt",
+    "FNO4d":      "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/AC3D/FNO4d_FNO4d_N200_pw0.00_E50.pt",
+    "MHNO":       "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/AC3D/TNO3d_MHNO_N200_pw0.00_E50.pt",
     # RENAMED: previous 'PENCO' -> 'PENCO-MHNO' (TNO3d backbone)
-    "PENCO-MHNO": "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/TNO3d_PENCO_N200_pw0.25_E50.pt",
+    "PENCO-MHNO": "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/AC3D/TNO3d_PENCO_N200_pw0.25_E50.pt",
     # ADDED: FNO4d + PENCO
-    "PENCO-FNO":  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/FNO4d_PENCO_N200_pw0.25_E50.pt",
-    "PurePhysics":"/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/TNO3d_PurePhysics_N200_pw1.00_E50.pt",
+    "PENCO-FNO":  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/AC3D/FNO4d_PENCO_N200_pw0.25_E50.pt",
+    "PurePhysics":"/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/AC3D/TNO3d_PurePhysics_N200_pw1.00_E50.pt",
 }
 
 # -----------------------------------

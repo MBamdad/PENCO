@@ -56,9 +56,30 @@ def main():
     # Data
     train_loader, test_loader, test_ids, normalizers = build_loaders()
 
+    # How many optimizer updates will we run?
+    #STEPS_PER_EPOCH = getattr(config, "STEPS_PER_EPOCH", 20)
+    #TOTAL_STEPS = config.EPOCHS * STEPS_PER_EPOCH
+    # How many optimizer updates will we run?
+    base_steps = getattr(config, "STEPS_PER_EPOCH", 20)
+
+    # Optional: scale steps with actual N_TRAIN for hybrid/data (not for pure physics)
+    if (config.PDE_WEIGHT < 1.0) and getattr(config, "SCALE_STEPS_WITH_NTRAIN", False):
+        N_ref = max(1, int(getattr(config, "N_TRAIN_REF", 50)))  # reference size (keep fixed across runs)
+        N_cur = max(1, int(getattr(config, "N_TRAIN_ACTUAL",  # <-- use what utilities actually loaded
+                                   getattr(config, "N_TRAIN", N_ref))))
+        STEPS_PER_EPOCH_EFF = max(1, int(round(base_steps * N_cur / N_ref)))
+    else:
+        STEPS_PER_EPOCH_EFF = base_steps
+
+    setattr(config, "STEPS_PER_EPOCH_EFF", STEPS_PER_EPOCH_EFF)
+    TOTAL_STEPS = config.EPOCHS * STEPS_PER_EPOCH_EFF
+    print(f"[Budget] steps/epoch={STEPS_PER_EPOCH_EFF}, total updates={TOTAL_STEPS}, "
+          f"approx windows={TOTAL_STEPS * config.BATCH_SIZE}")
+
     # Optim
     optimizer = Adam(model.parameters(), lr=config.LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)
-    scheduler = CosineAnnealingLR(optimizer, T_max=config.EPOCHS)
+    #scheduler = CosineAnnealingLR(optimizer, T_max=config.EPOCHS)
+    scheduler = CosineAnnealingLR(optimizer, T_max=TOTAL_STEPS)  # step this every batch
 
     # Train (hybrid, with PINNs-style debug prints)
     train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, device, pde_weight=config.PDE_WEIGHT)

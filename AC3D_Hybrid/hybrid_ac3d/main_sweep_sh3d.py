@@ -1,6 +1,10 @@
 # main_sweep_sh3d.py
 # SH3D sweep that preserves training/eval math IDENTICAL to utilities.train_fno_hybrid (SH path),
 # but adds logging + .mat/model saving like run_sweep_ch3d.py.
+# UPDATED to match MBE sweep policy:
+#   • Fixed test split (utilities.build_loaders + N_TEST_FIXED)
+#   • Step-based training (per-batch LR stepping) with STEPS_PER_EPOCH_EFF (fallback=20)
+#   • Reseed before every scenario
 
 import os, time, random, math
 from pathlib import Path
@@ -21,12 +25,11 @@ from utilities import (
 from functions import (
     # core residuals / penalties
     scheme_residual_fourier,
-    energy_penalty,
+    energy_penalty,  # (kept import; not used in SH branch)
     # ---- SH-specific additions ----
     physics_collocation_tau_L2_SH,   # SH collocation residual (L2)
-    energy_penalty_sh, semi_implicit_step_sh, low_k_mse,              # SH energy hinge
-    semi_implicit_step               # teacher step (kept to mirror your utilities SH branch)
-    # (if your utilities use semi_implicit_step_sh instead, swap the import+call below)
+    energy_penalty_sh, semi_implicit_step_sh, low_k_mse,
+    semi_implicit_step               # (kept to mirror prior imports; not used below)
 )
 
 # --------------------
@@ -142,6 +145,7 @@ def _collect_frames_and_volumes(model, mat_path, test_id, frames, T_in, Nt, down
         exact_slices.append(gt[t, :, :, zc])
         pred_slices.append(pred[t, :, :, zc])
 
+    # volumes (optionally downsampled)
         v_gt = gt[t]; v_pr = pred[t]
         if downsample > 1:
             v_gt = v_gt[::downsample, ::downsample, ::downsample]
@@ -151,30 +155,33 @@ def _collect_frames_and_volumes(model, mat_path, test_id, frames, T_in, Nt, down
     return (
         _asF32F(np.stack(pred_slices, axis=0)),  # (len(frames), S, S)
         _asF32F(np.stack(exact_slices, axis=0)),
-        _asF32F(np.stack(pred_vols,   axis=0)),  # (len(frames), S',S',S'
+        _asF32F(np.stack(pred_vols,   axis=0)),  # (len(frames), S',S',S')
         _asF32F(np.stack(exact_vols,  axis=0))
     )
 
 # --------------------
-# TRAIN LOOP: byte-for-byte math from utilities.train_fno_hybrid
-# (SH3D path), with logging arrays added.
+# TRAIN LOOP: SH path with step-based training + logging (matches MBE sweep policy)
 # --------------------
-def train_fno_hybrid_LOGGING(model, train_loader, test_loader, optimizer, scheduler, device, pde_weight=None):
-    # ------- IDENTICAL TRAIN/EVAL MATH AS utilities.train_fno_hybrid (SH3D path) -------
+def train_fno_hybrid_LOGGING_STEPBASED(model, train_loader, test_loader, optimizer, scheduler, device, pde_weight=None):
     pde_weight = CFG.PDE_WEIGHT if pde_weight is None else pde_weight
+    assert CFG.PROBLEM == 'SH3D', "This sweep is intended for SH3D."
 
-    USE_SH = (CFG.PROBLEM == 'SH3D')
-    w_mid, w_fft = 1.0, 1.0
-    w_mm = 0.0  # SH: disable MM
     CLIP_NORM = 1.0
-
     logs = {k: [] for k in [
         'epoch', 'data_loss', 'phys_loss', 'energy_loss', 'scheme_loss',
         'total_loss', 'test_relL2', 'l_mid_norm_sh', 'lr'
     ]}
 
-    print("Epoch |   Time   | DataLoss | PhysLoss | TotalLoss | Test relL2 | energy_loss | scheme_loss | l_mid_norm_sh | LR")
+    from itertools import cycle
     from timeit import default_timer
+
+    # Same effective steps/epoch convention as single-run/MBE sweep
+    steps_per_epoch = int(getattr(CFG, "STEPS_PER_EPOCH_EFF",
+                           getattr(CFG, "STEPS_PER_EPOCH", 20)))
+    train_iter = cycle(train_loader)
+
+    print("Epoch |   Time   | DataLoss | PhysLoss | TotalLoss | Test relL2 | energy_loss | scheme_loss | l_mid_norm_sh | LR")
+
     for ep in range(CFG.EPOCHS):
         model.train()
         t1 = default_timer()
@@ -182,7 +189,11 @@ def train_fno_hybrid_LOGGING(model, train_loader, test_loader, optimizer, schedu
         energy_loss_acc = scheme_loss_acc = 0.0
         n_batches = 0
 
-        for x, y in train_loader:
+        # ramps
+        epoch_frac = ep / max(1, (CFG.EPOCHS - 1))  # 0..1
+
+        for _ in range(steps_per_epoch):
+            x, y = next(train_iter)
             x = x.to(device, non_blocking=True)
             y = y.to(device, non_blocking=True)
             u_in_last = x[..., -1:]  # (B,S,S,S,1)
@@ -190,57 +201,49 @@ def train_fno_hybrid_LOGGING(model, train_loader, test_loader, optimizer, schedu
             optimizer.zero_grad(set_to_none=True)
 
             # forward
-            y_pred = model(x)
-            y_hat = y_pred
+            y_hat = model(x)
 
-            # ---- data term (same scaling style you used) ----
-            if pde_weight == 0:
-                loss_data = 1.0 * F.mse_loss(y_pred, y)
-            else:
-                loss_data = 1e3 * F.mse_loss(y_pred, y)
+            # data term (SH path uses same scaling style)
+            loss_data = (1.0 if pde_weight == 0 else 1e3) * F.mse_loss(y_hat, y)
 
-            # ----- physics bundle (SH path) -----
-            if USE_SH:
-                # --- ramps (match the good version) ---
-                epoch_frac = ep / max(1, (CFG.EPOCHS - 1))  # 0..1
-                w_scheme = 0.32 - 0.12 * epoch_frac
-                w_lowk = 0.25 + 0.60 * (epoch_frac ** 2)
+            # ----- SH physics bundle (matches utilities SH branch) -----
+            w_scheme = 0.32 - 0.12 * epoch_frac
+            w_lowk   = 0.25 + 0.60 * (epoch_frac ** 2)
 
-                # --- SH residuals (UN-normalized so the loss can actually go down) ---
-                l_fft = scheme_residual_fourier(u_in_last, y_hat)
-                tau_off = 1.0 / (2.0 * math.sqrt(5.0))
-                l_tau1 = physics_collocation_tau_L2_SH(u_in_last, y_hat, tau=(0.5 - tau_off))
-                l_tau2 = physics_collocation_tau_L2_SH(u_in_last, y_hat, tau=(0.5 + tau_off))
-                l_mid_norm = 0.5 * (l_tau1 + l_tau2)
+            # residuals
+            l_fft = scheme_residual_fourier(u_in_last, y_hat)
+            tau_off = 1.0 / (2.0 * math.sqrt(5.0))
+            l_tau1 = physics_collocation_tau_L2_SH(u_in_last, y_hat, tau=(0.5 - tau_off))
+            l_tau2 = physics_collocation_tau_L2_SH(u_in_last, y_hat, tau=(0.5 + tau_off))
+            l_mid_norm = 0.5 * (l_tau1 + l_tau2)
 
-                # --- teacher consistency (SH step) + gentle second-step check ---
+            # teacher + gentle second step
+            u_si1 = semi_implicit_step_sh(u_in_last, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)
+            loss_scheme1 = F.mse_loss(y_hat, u_si1)
+            with torch.no_grad():
+                u_si2 = semi_implicit_step_sh(u_si1, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)
+            x2 = torch.cat([x[..., 1:], y_hat], dim=-1)
+            y_hat2 = model(x2)
+            loss_scheme2 = F.mse_loss(y_hat2, u_si2)
+            loss_scheme = w_scheme * (0.6 * loss_scheme1 + 0.4 * loss_scheme2)
 
-                u_si1 = semi_implicit_step_sh(u_in_last, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)
+            # low-k anchor
+            l_lowk = low_k_mse(y_hat, u_si1, frac=0.45)
 
-                loss_scheme1 = F.mse_loss(y_hat, u_si1)
-                with torch.no_grad():
-                    u_si2 = semi_implicit_step_sh(u_si1, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)
-                x2 = torch.cat([x[..., 1:], y_hat], dim=-1)
+            # physics mix (scale identical to utilities)
+            loss_phys = 6e-3 * (1.0 * l_fft + 0.7 * l_mid_norm + w_lowk * 0.40 * l_lowk)
 
-                y_hat2 = model(x2)
-                loss_scheme2 = F.mse_loss(y_hat2, u_si2)
-                loss_scheme = w_scheme * (0.6 * loss_scheme1 + 0.4 * loss_scheme2)
-                # --- large-scale (low-k) anchor (UN-normalized) ---
-                l_lowk = low_k_mse(y_hat, u_si1, frac=0.45)
-                # --- physics mixture & scale that decreases as model improves ---
-                loss_phys = 6e-3 * (1.0 * l_fft + 0.7 * l_mid_norm + w_lowk * 0.40 * l_lowk)
-                # --- SH free-energy hinge ---
-                loss_energy = 0.03 * energy_penalty_sh(u_in_last, y_hat, CFG.DX, CFG.EPSILON_PARAM)
-            else:
-                raise RuntimeError("This sweep is intended for SH3D only.")
+            # SH free-energy hinge
+            loss_energy = 0.03 * energy_penalty_sh(u_in_last, y_hat, CFG.DX, CFG.EPSILON_PARAM)
 
-            # ---- total loss (unchanged structure) ----
+            # total
             loss_total = (1.0 - pde_weight) * loss_data + pde_weight * (loss_phys + loss_scheme + loss_energy)
 
-            # backward
+            # backward + step
             loss_total.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), CLIP_NORM)
             optimizer.step()
+            scheduler.step()  # per-batch LR step (step-based training)
 
             # accumulators
             data_loss_acc   += loss_data.item()
@@ -251,7 +254,7 @@ def train_fno_hybrid_LOGGING(model, train_loader, test_loader, optimizer, schedu
             total_loss_acc  += loss_total.item()
             n_batches       += 1
 
-        # eval (IDENTICAL to utilities: no rollout physics here)
+        # eval (same as utilities path)
         model.eval()
         with torch.no_grad():
             rels = []
@@ -262,17 +265,16 @@ def train_fno_hybrid_LOGGING(model, train_loader, test_loader, optimizer, schedu
                 rels.append(relative_l2(y_pred, y))
             test_rel = torch.cat(rels, dim=0).mean().item()
 
-        scheduler.step()
         t2 = default_timer()
         lr = optimizer.param_groups[0]['lr']
 
-        # epoch print identical header/fields
+        # epoch print
         if ep % 15 == 0:
             print(f"{ep:5d} | {t2-t1:7.3f} | "
                   f"{data_loss_acc/n_batches:8.3e} | {phys_loss_acc/n_batches:8.3e} | {total_loss_acc/n_batches:9.3e} | "
                   f"{test_rel:10.3e} |  {energy_loss_acc/n_batches:10.3e} |  {scheme_loss_acc/n_batches:10.3e} | {l_mid_norm_acc:10.3e} | {lr: .2e}")
 
-        # log arrays for saving
+        # logs
         logs['epoch'].append(ep)
         logs['data_loss'].append(data_loss_acc/n_batches)
         logs['phys_loss'].append(phys_loss_acc/n_batches)
@@ -286,7 +288,6 @@ def train_fno_hybrid_LOGGING(model, train_loader, test_loader, optimizer, schedu
     for k in logs:
         logs[k] = _asF32F(np.array(logs[k], dtype=np.float32))
     return logs
-    # ------- end identical training/eval math -------
 
 
 def set_seeds(seed=42):
@@ -307,28 +308,48 @@ def main():
 
     for ntrain in DEFAULT_N_TRAINS:
         CFG.N_TRAIN = int(ntrain)
-        CFG.N_TEST  = max(1, CFG.N_TRAIN // 4)
-
-        # Build loaders once per N_TRAIN (same split across methods/weights)
-        train_loader, test_loader, test_ids, _ = build_loaders()
-        rep_test_id = int(test_ids[0])
+        # Fixed test split handled in build_loaders via N_TEST_FIXED
 
         for model_name in DEFAULT_MODELS:
             CFG.MODEL = model_name
             for pw in DEFAULT_PDE_WEIGHTS:
                 CFG.PDE_WEIGHT = float(pw)
 
+                # --- Reseed so each scenario starts from the same RNG state ---
+                set_seeds(CFG.SEED)
+
+                # Build loaders AFTER setting PDE_WEIGHT (PURE_PHYSICS_USE_ALL may apply)
+                train_loader, test_loader, test_ids, _ = build_loaders()
+
+                # ===== Step-based scaling (identical to MBE sweep & single-run) =====
+                base_steps = int(getattr(CFG, "STEPS_PER_EPOCH", 20))
+                if (CFG.PDE_WEIGHT < 1.0) and getattr(CFG, "SCALE_STEPS_WITH_NTRAIN", False):
+                    N_ref = max(1, int(getattr(CFG, "N_TRAIN_REF", 50)))
+                    N_cur = max(1, int(getattr(CFG, "N_TRAIN_ACTUAL",
+                                               getattr(CFG, "N_TRAIN", N_ref))))
+                    STEPS_PER_EPOCH_EFF = max(1, int(round(base_steps * N_cur / N_ref)))
+                else:
+                    STEPS_PER_EPOCH_EFF = base_steps
+
+                setattr(CFG, "STEPS_PER_EPOCH_EFF", STEPS_PER_EPOCH_EFF)
+                total_steps = CFG.EPOCHS * STEPS_PER_EPOCH_EFF
+                print(f"[Budget] N_TRAIN={CFG.N_TRAIN} (actual={getattr(CFG,'N_TRAIN_ACTUAL',CFG.N_TRAIN)}), "
+                      f"steps/epoch={STEPS_PER_EPOCH_EFF}, total={total_steps}")
+                # ===================================================================
+
+                rep_test_id = int(test_ids[0])
+
                 # ---- model, optim, sched ----
                 model = _init_model(model_name)
                 optimizer = Adam(model.parameters(), lr=CFG.LEARNING_RATE, weight_decay=CFG.WEIGHT_DECAY)
-                scheduler = CosineAnnealingLR(optimizer, T_max=CFG.EPOCHS)
+                scheduler = CosineAnnealingLR(optimizer, T_max=total_steps)  # per-batch schedule
 
-                # ---- TRAIN (identical math) + logs ----
-                logs = train_fno_hybrid_LOGGING(
+                # ---- TRAIN (step-based) + logs ----
+                logs = train_fno_hybrid_LOGGING_STEPBASED(
                     model, train_loader, test_loader, optimizer, scheduler, CFG.DEVICE, pde_weight=CFG.PDE_WEIGHT
                 )
 
-                # ---- METRICS & FRAMES (reuse utilities rollout for identical eval) ----
+                # ---- METRICS & FRAMES ----
                 relL2_vs_time = _relative_l2_vs_time(
                     model, CFG.MAT_DATA_PATH, test_ids,
                     T_in=CFG.T_IN_CHANNELS, Nt=CFG.TOTAL_TIME_STEPS
@@ -358,16 +379,10 @@ def main():
                     }
                 }, ckpt_path)
 
-                # ---- NEW: per-time-step error statistics across the test set ----
+                # ---- per-time-step error stats ----
                 rel_stats = _relative_l2_vs_time_stats(
                     model, CFG.MAT_DATA_PATH, test_ids,
                     T_in=CFG.T_IN_CHANNELS, Nt=CFG.TOTAL_TIME_STEPS
-                )
-
-                # (recollect frames for pack)
-                pred_slices, exact_slices, pred_vols, exact_vols = _collect_frames_and_volumes(
-                    model, CFG.MAT_DATA_PATH, rep_test_id, TIME_FRAMES,
-                    T_in=CFG.T_IN_CHANNELS, Nt=CFG.TOTAL_TIME_STEPS, downsample=VOLUME_DOWNSAMPLE
                 )
 
                 # ---- PACK SCENARIO ----
@@ -390,7 +405,7 @@ def main():
                     'relL2_vs_time': relL2_vs_time,
 
                     # per-time-step error stats
-                    'relL2_stats_time_steps': rel_stats['time_steps'],
+                    'relL2_stats_time_steps': _asF32F(np.array(rel_stats['time_steps'], dtype=np.int32)),
                     'relL2_stats_mean': _asF32F(rel_stats['mean']),
                     'relL2_stats_std': _asF32F(rel_stats['std']),
                     'relL2_stats_q1': _asF32F(rel_stats['q1']),
@@ -413,7 +428,7 @@ def main():
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
 
-    # ---- SAVE one MATLAB file (same top-level structure & keys as run_sweep) ----
+    # ---- SAVE one MATLAB file ----
     out = {
         'meta': {
             'GRID_RESOLUTION': CFG.GRID_RESOLUTION,
@@ -430,6 +445,12 @@ def main():
             'MODELS': np.array(DEFAULT_MODELS, dtype=object),
             'N_TRAINS': _asF32F(np.array(DEFAULT_N_TRAINS, dtype=np.int32)),
             'VOLUME_DOWNSAMPLE': int(VOLUME_DOWNSAMPLE),
+
+            # record the same budgeting knobs as MBE sweep
+            'STEPS_PER_EPOCH': int(getattr(CFG, "STEPS_PER_EPOCH", 20)),
+            'N_TEST_FIXED': int(getattr(CFG, "N_TEST_FIXED", 40)),
+            'SCALE_STEPS_WITH_NTRAIN': bool(getattr(CFG, "SCALE_STEPS_WITH_NTRAIN", False)),
+            'N_TRAIN_REF': int(getattr(CFG, "N_TRAIN_REF", 50)),
         },
         'scenarios': np.array(scenarios, dtype=object)
     }
