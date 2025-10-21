@@ -10,7 +10,7 @@ from scipy.ndimage import zoom as nd_zoom
 # --- repo imports (your files) ---
 import config as CFG
 from networks import FNO4d, TNO3d
-from functions import semi_implicit_step
+from functions import semi_implicit_step, semi_implicit_step_pfc
 
 # -------------------------------------------------------------------
 # 1) PROBLEM-SPECIFIC CONFIGURATIONS
@@ -66,6 +66,22 @@ CKPTS_SH3D = {
                     "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/TNO3d_PurePhysics_N200_pw1.00_E50.pt"),
 }
 
+# --- Checkpoints for SH3D ---
+CKPTS_PFC3D = {
+    # method_label: (model_type, path)
+    "FNO4d": ("FNO4d",
+              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/PFC3d_models/FNO4d_FNO4d_N50_pw0.00_E50.pt"),
+    "MHNO": ("TNO3d",
+             "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/PFC3d_models/TNO3d_MHNO_N200_pw0.00_E50.pt"),
+    # NEW: split PENCO into two variants for CH3D (as in AC3D)
+    "PENCO-MHNO": ("TNO3d",
+                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/PFC3d_models/TNO3d_PENCO_N200_pw0.75_E50.pt"),
+    "PENCO-FNO": ("FNO4d",
+                  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/PFC3d_models/FNO4d_PENCO_N200_pw0.75_E50.pt"),
+    "PurePhysics": ("TNO3d",
+                    "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/PFC3d_models/TNO3d_PurePhysics_N200_pw1.00_E50.pt"),
+}
+
 
 
 # --- Dynamic selection based on CFG.PROBLEM ---
@@ -84,6 +100,12 @@ elif CFG.PROBLEM == 'SH3D':
     METHODS = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]
     IC_FUNCTION = 'create_initial_condition_sphere_sh3d'
     IC_TYPE = 'sphere'
+elif CFG.PROBLEM == 'PFC3D':
+    CKPTS = CKPTS_PFC3D
+    METHODS = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]  # <- now 5 like AC3D
+    IC_FUNCTION = 'create_initial_condition_star_pfc3d'
+    IC_TYPE = 'star'
+
 else:
     raise ValueError(f"Problem '{CFG.PROBLEM}' not configured in this script.")
 
@@ -159,6 +181,55 @@ def create_initial_condition_sphere_sh3d():
 
     return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
 
+
+def create_initial_condition_star_pfc3d():
+    """Generates the star IC for the PFC3D problem (SMOOTH version to match MATLAB)."""
+    S = CFG.GRID_RESOLUTION
+    L = CFG.L_DOMAIN
+    epsilon = CFG.EPSILON_PARAM
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
+    selected_frames = [0, 20, 40, 60, 80, 100]
+
+    xx, yy, zz = _grid(S, L)
+
+    # Star shape parameters (EXACTLY as in MATLAB)
+    theta = np.arctan2(zz, xx)
+    R_theta = 5.0 + 1.0 * np.cos(6 * theta)
+    dist = np.sqrt(xx ** 2 + 2 * yy ** 2 + zz ** 2)
+
+    # SMOOTH initial condition (matches MATLAB stable version)
+    interface_width = np.sqrt(2) * epsilon
+    u0 = np.tanh((R_theta - dist) / interface_width).astype(np.float32)  # <-- SMOOTH!
+
+
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
+
+
+def create_initial_condition_sphere_pfc3d():
+    """
+    Generates the SPHERE IC for the PFC3D problem (unseen input for models).
+    Form: u0 = tanh((R - r) / (sqrt(2)*epsilon))  -- same as our MATLAB PFC sphere.
+    """
+    S = CFG.GRID_RESOLUTION
+    L = CFG.L_DOMAIN
+    epsilon = CFG.EPSILON_PARAM
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
+    selected_frames = [0, 20, 40, 60, 80, 100]
+
+    xx, yy, zz = _grid(S, L)
+    r = np.sqrt(xx**2 + yy**2 + zz**2)
+
+    # Radius choice to mirror the MATLAB PFC3D example on L=10*pi
+    # (if your config uses a different L, feel free to adjust R)
+    R = 6.0
+    interface_width = np.sqrt(2.0) * epsilon
+    u0 = np.tanh((R - r) / interface_width).astype(np.float32)
+
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
+
+
 # ----------------------------------------------------
 # 3) Model Loading
 # ----------------------------------------------------
@@ -197,6 +268,22 @@ def bootstrap_states_from_u0(u0_np: np.ndarray, T_in: int, device: torch.device)
         states.append(u)
     x0 = torch.cat(states, dim=-1)
     return states, x0
+
+@torch.no_grad()
+def bootstrap_states_from_u0_pfc(u0_np: np.ndarray, T_in: int, device: torch.device):
+    """
+    Semi-implicit spectral step that matches the MATLAB PFC DNS and training generator:
+    v̂ = (Û/dt - K·F[u^3] + 2K^2·Û) / (1/dt + (1-ε)K + K^3),  u^{n+1}=ifftn(v̂)
+    """
+    # u: (1,S,S,S,1)
+    u = torch.from_numpy(u0_np).to(device=device).unsqueeze(0).unsqueeze(-1)
+    states = [u]
+    for _ in range(1, T_in):
+        u = semi_implicit_step_pfc(u, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)  # PFC step!
+        states.append(u)
+    x0 = torch.cat(states, dim=-1)
+    return states, x0
+
 
 # -----------------------------------------------------------
 # 5) Rollout autoregressively
@@ -297,7 +384,10 @@ def main():
     assert abs(dt - CFG.DT) < 1e-12, "DT mismatch between IC and CFG"
 
     # Build teacher window
-    teacher_states, x0 = bootstrap_states_from_u0(u0_np, CFG.T_IN_CHANNELS, device=device)
+    if CFG.PROBLEM == 'PFC3D':
+        teacher_states, x0 = bootstrap_states_from_u0_pfc(u0_np, CFG.T_IN_CHANNELS, device=device)
+    else:
+        teacher_states, x0 = bootstrap_states_from_u0(u0_np, CFG.T_IN_CHANNELS, device=device)
 
     # Load models & rollout for the selected problem
     volumes_by_method = {}
@@ -348,4 +438,30 @@ def main():
     print(f"Saved MATLAB results to: {mat_name}")
 
 if __name__ == "__main__":
+    device = CFG.DEVICE
+
+    # Get the correct IC function from its name and call it
+    ic_func = globals()[IC_FUNCTION]
+    u0_np, domain_lengths, grid_sizes, Nt, dt, selected_frames = ic_func()
+
+    # ==================== DIAGNOSTIC CODE ====================
+    print(f"Python IC diagnostics:")
+    print(f"  u0 range: [{u0_np.min():.3f}, {u0_np.max():.3f}]")
+    print(f"  u0 mean: {u0_np.mean():.3f}")
+    print(f"  Grid: {grid_sizes}, Domain: {domain_lengths}")
+    print(f"  epsilon: {CFG.EPSILON_PARAM}, dt: {dt}")
+    print(f"  L_DOMAIN: {CFG.L_DOMAIN}")
+    # =========================================================
+
+    Sx, Sy, Sz = grid_sizes
+    assert (Sx, Sy, Sz) == (CFG.GRID_RESOLUTION,) * 3, \
+        f"Grid mismatch: IC {grid_sizes} vs CFG {CFG.GRID_RESOLUTION}"
+    assert abs(dt - CFG.DT) < 1e-12, "DT mismatch between IC and CFG"
+
+    # Build teacher window
+    if CFG.PROBLEM == 'PFC3D':
+        teacher_states, x0 = bootstrap_states_from_u0_pfc(u0_np, CFG.T_IN_CHANNELS, device=device)
+    else:
+        teacher_states, x0 = bootstrap_states_from_u0(u0_np, CFG.T_IN_CHANNELS, device=device)
+
     main()
