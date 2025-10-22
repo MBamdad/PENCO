@@ -1313,6 +1313,7 @@ def physics_collocation_tau_Hm1_MBE(u_in, u_pred, tau=0.5 - 1.0/(2.0*_math.sqrt(
 # CH
 
 # === ADD: CH3D RHS (dataset-consistent split) ================================
+''''
 def _rhs_ch3d(u, dx, eps):
     """
     CH3D gradient flow used in your MATLAB generator:
@@ -1328,8 +1329,9 @@ def _rhs_ch3d(u, dx, eps):
     lap_chem = laplacian_fourier_3d_phys(chem, dx)  # Δ f'(u)
     return -2.0 * lap_u - (eps**2) * bi_u - lap_chem
 # ============================================================================
-
-# === ADD: CH3D semi-implicit teacher step (matches MATLAB exactly) ==========
+'''
+# = ADD: CH3D semi-implicit teacher step (matches MATLAB exactly) ==========
+'''''
 def semi_implicit_step_ch(u_in, dt, dx, eps):
     """
     (1 + dt*(2k^2 + ε^2 k^4)) û^{n+1} = û^n - dt * k^2 * FFT( (u^n)^3 - 3 u^n )
@@ -1346,6 +1348,72 @@ def semi_implicit_step_ch(u_in, dt, dx, eps):
     U1 = numer / (denom + 1e-12)
     u1 = torch.fft.ifftn(U1, dim=(1,2,3)).real
     return u1.unsqueeze(-1).to(u_in.dtype)
+'''''
+
+
+def semi_implicit_step_ch(u_in, dt, dx, eps):
+    """
+    CORRECTED to exactly match MATLAB:
+        (1 + dt*(2k² + ε²k⁴)) û^{n+1} = û^n - dt*k² * FFT(u^n³ - 3u^n)
+    """
+    u0 = u_in.squeeze(-1).float()
+    B, S, _, _ = u0.shape
+    k2 = _k_spectrum(S, S, S, dx, u0.device)  # (2π/L)²|k|²
+
+    # Exact MATLAB match
+    chem0_hat = torch.fft.fftn(u0 ** 3 - 3.0 * u0, dim=(1, 2, 3))
+    U0 = torch.fft.fftn(u0, dim=(1, 2, 3))
+
+    denom = 1.0 + dt * (2.0 * k2 + (eps ** 2) * (k2 ** 2))
+    numer = U0 - dt * k2 * chem0_hat  # Note: k2 here is (kxx+kyy+kzz) equivalent
+
+    U1 = numer / (denom + 1e-12)
+    u1 = torch.fft.ifftn(U1, dim=(1, 2, 3)).real
+    return u1.unsqueeze(-1).to(u_in.dtype)
+
+
+def scheme_residual_fourier_ch(u_in, u_pred):
+    """
+    CORRECTED CH3D scheme residual to match MATLAB
+    """
+    dt, dx, eps = config.DT, config.DX, config.EPSILON_PARAM
+    u0 = u_in.squeeze(-1).float()
+    up = u_pred.squeeze(-1).float()
+
+    B, S, _, _ = u0.shape
+    k2 = _k_spectrum(S, S, S, dx, u0.device)
+
+    U0 = torch.fft.fftn(u0, dim=(1, 2, 3))
+    UP = torch.fft.fftn(up, dim=(1, 2, 3))
+    chem0_hat = torch.fft.fftn(u0 ** 3 - 3.0 * u0, dim=(1, 2, 3))
+
+    denom = 1.0 + dt * (2.0 * k2 + (eps ** 2) * (k2 ** 2))
+    rhs = U0 - dt * k2 * chem0_hat
+
+    rhat = denom * UP - rhs
+
+    # Ignore k=0 for mass conservation (MATLAB does this implicitly)
+    rhat = rhat * (k2 > 0)
+
+    # Precondition
+    rhat = rhat / (denom + 1e-12)
+
+    r2 = rhat.real ** 2 + rhat.imag ** 2
+    return r2.mean()
+
+
+def _rhs_ch3d(u, dx, eps):
+    """
+    CORRECTED CH3D RHS to match MATLAB generator:
+        u_t = -Δ[2u + ε²Δu + (u³ - 3u)]
+    This matches the MATLAB semi-implicit splitting.
+    """
+    lap_u = laplacian_fourier_3d_phys(u, dx)  # Δu
+    bi_u = biharmonic(u, dx)  # Δ²u
+    chem = u ** 3 - 3.0 * u  # f'(u) = u³ - 3u
+
+    # The RHS is -Δ of everything
+    return -laplacian_fourier_3d_phys(2.0 * u + (eps ** 2) * lap_u + chem, dx)
 # ============================================================================
 
 

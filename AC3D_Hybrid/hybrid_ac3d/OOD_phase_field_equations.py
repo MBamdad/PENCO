@@ -22,15 +22,15 @@ from functions import semi_implicit_step, semi_implicit_step_pfc
 CKPTS_AC3D = {
     # method_label: (model_type, path)
     "FNO4d": ("FNO4d",
-              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/AC3D/FNO4d_FNO4d_N200_pw0.00_E50.pt"),
+              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/AC3d_models/FNO4d_FNO4d_N200_pw0.00_E50.pt"),
     "MHNO": ("TNO3d",
-             "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/AC3D/TNO3d_MHNO_N200_pw0.00_E50.pt"),
+             "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/AC3d_models/TNO3d_MHNO_N200_pw0.00_E50.pt"),
     "PENCO-MHNO": ("TNO3d",
-                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/AC3D/TNO3d_PENCO_N200_pw0.25_E50.pt"),
+                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/AC3d_models/TNO3d_PENCO_N200_pw0.25_E50.pt"),
     "PENCO-FNO": ("FNO4d",
-                  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/AC3D/FNO4d_PENCO_N200_pw0.25_E50.pt"),
+                  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/AC3d_models/FNO4d_PENCO_N200_pw0.25_E50.pt"),
     "PurePhysics": ("TNO3d",
-                    "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/AC3D/TNO3d_PurePhysics_N200_pw1.00_E50.pt"),
+                    "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/AC3d_models/TNO3d_PurePhysics_N200_pw1.00_E50.pt"),
 }
 
 # --- Checkpoints for CH3D ---
@@ -42,11 +42,11 @@ CKPTS_CH3D = {
              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/TNO3d_MHNO_N200_pw0.00_E50.pt"),
     # NEW: split PENCO into two variants for CH3D (as in AC3D)
     "PENCO-MHNO": ("TNO3d",
-                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/TNO3d_PENCO_N200_pw0.75_E50.pt"),
+                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/TNO3d_PENCO_N200_pw0.25_E50.pt"),
     "PENCO-FNO": ("FNO4d",
-                  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/FNO4d_PENCO_N200_pw0.75_E50.pt"),
+                  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/FNO4d_PENCO_N200_pw0.25_E50.pt"),
     "PurePhysics": ("TNO3d",
-                    "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/TNO3d_PurePhysics_N200_pw1.00_E50.pt"),
+                    "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/FNO4d_PurePhysics_N200_pw1.00_E200.pt"),
 }
 
 
@@ -93,8 +93,10 @@ if CFG.PROBLEM == 'AC3D':
 elif CFG.PROBLEM == 'CH3D':
     CKPTS = CKPTS_CH3D
     METHODS = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]  # <- now 5 like AC3D
-    IC_FUNCTION = 'create_initial_condition_star_ch3d'
-    IC_TYPE = 'star'
+    #IC_FUNCTION = 'create_initial_condition_star_ch3d'
+    IC_FUNCTION = 'create_initial_condition_sphere_ch3d'
+    #IC_TYPE = 'star'
+    IC_TYPE = 'sphere'
 elif CFG.PROBLEM == 'SH3D':
     CKPTS = CKPTS_SH3D
     METHODS = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]
@@ -135,7 +137,21 @@ def create_initial_condition_sphere_ac3d():
 
     return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
 
+def create_initial_condition_sphere_ch3d():
+    """Generates the sphere IC for the AC3D problem."""
+    S = CFG.GRID_RESOLUTION
+    L = CFG.L_DOMAIN
+    epsilon = CFG.EPSILON_PARAM
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
+    selected_frames = [0, 20, 40, 60, 80, 100]
 
+    radius = 0.5
+    xx, yy, zz = _grid(S, L)
+    interface_width = np.sqrt(16.0) * epsilon
+    u0 = np.tanh((radius - np.sqrt(xx ** 2 + yy ** 2 + zz ** 2)) / interface_width).astype(np.float32)
+
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
 def create_initial_condition_star_ch3d():
     """Generates the star IC for the CH3D problem."""
     S = CFG.GRID_RESOLUTION
@@ -152,9 +168,9 @@ def create_initial_condition_star_ch3d():
     theta = np.arccos(np.clip(zz / r, -1.0, 1.0))  # polar
     phi = np.arctan2(yy, xx)  # azimuth
 
-    base_r = 0.25
+    base_r = 0.5
     amp = 0.10
-    freq = 5
+    freq = 6 # 5
 
     mod = 1.0 + amp * (np.cos(freq * theta) * np.cos(freq * phi))
     r_star = base_r * mod
@@ -256,6 +272,45 @@ def load_model(method: str, model_type: str, device: torch.device):
     model.eval()
     return model
 
+## CH3D
+import torch.fft as tfft
+
+def semi_implicit_step_ch3d(u, dt, dx, epsilon):
+    """
+    CH3D semi-implicit (matches MATLAB):
+        u^{n+1} = ifftn( (Û - dt*K2*F[u^3 - 3u]) / (1 + dt*(2*K2 + eps^2*K2^2)) )
+    u: (B,S,S,S,1), real
+    """
+    # squeeze channel
+    u = u[..., 0]  # (B,Sx,Sy,Sz)
+
+    B, Sx, Sy, Sz = u.shape
+    # Angular wavenumbers (rad/unit length). IMPORTANT: NO extra /L.
+    # np.fft.fftfreq(n, d=dx) gives cycles per unit; multiply by 2π to get rad/unit.
+    kx = 2 * np.pi * np.fft.fftfreq(Sx, d=dx)
+    ky = 2 * np.pi * np.fft.fftfreq(Sy, d=dx)
+    kz = 2 * np.pi * np.fft.fftfreq(Sz, d=dx)
+
+    # Build K^2 grid on the correct device/dtype
+    KX2 = torch.from_numpy(kx.astype(np.float32)**2).to(u.device)
+    KY2 = torch.from_numpy(ky.astype(np.float32)**2).to(u.device)
+    KZ2 = torch.from_numpy(kz.astype(np.float32)**2).to(u.device)
+    K2x, K2y, K2z = torch.meshgrid(KX2, KY2, KZ2, indexing="ij")
+    K2 = K2x + K2y + K2z
+    del K2x, K2y, K2z
+
+    U = tfft.fftn(u, dim=(-3, -2, -1))
+    nonlin = u**3 - 3.0 * u
+    NL = tfft.fftn(nonlin, dim=(-3, -2, -1))
+
+    numer = U - dt * K2 * NL
+    denom = 1.0 + dt * (2.0 * K2 + (epsilon**2) * (K2**2))
+
+    V = numer / denom
+    u_next = tfft.ifftn(V, dim=(-3, -2, -1)).real  # (B,Sx,Sy,Sz)
+    return u_next.unsqueeze(-1)                     # (B,Sx,Sy,Sz,1)
+
+
 # -----------------------------------------------------------
 # 4) Bootstrap T_in window with semi-implicit teacher
 # -----------------------------------------------------------
@@ -264,7 +319,12 @@ def bootstrap_states_from_u0(u0_np: np.ndarray, T_in: int, device: torch.device)
     u = torch.from_numpy(u0_np).to(device=device).unsqueeze(0).unsqueeze(-1)
     states = [u]
     for _ in range(1, T_in):
-        u = semi_implicit_step(u, CFG.DT, CFG.DX, CFG.EPS2)
+        if CFG.PROBLEM == 'PFC3D':
+            u = semi_implicit_step_pfc(u, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)
+        elif CFG.PROBLEM == 'CH3D':
+            u = semi_implicit_step_ch3d(u, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)  # <<< use CH step
+        else:
+            u = semi_implicit_step(u, CFG.DT, CFG.DX, CFG.EPS2)  # AC/SH path as before
         states.append(u)
     x0 = torch.cat(states, dim=-1)
     return states, x0
@@ -389,6 +449,12 @@ def main():
     else:
         teacher_states, x0 = bootstrap_states_from_u0(u0_np, CFG.T_IN_CHANNELS, device=device)
 
+    def _check_finite(vols, name):
+        vmin, vmax = np.nanmin(vols), np.nanmax(vols)
+        if not np.isfinite(vmin) or not np.isfinite(vmax) or vmax > 10 or vmin < -10:
+            print(f"[WARN] {name}: suspicious values: min={vmin:.3g}, max={vmax:.3g}")
+        return vols
+
     # Load models & rollout for the selected problem
     volumes_by_method = {}
     for method in METHODS:
@@ -396,7 +462,9 @@ def main():
         model_type, _ = CKPTS[method]
         model = load_model(method, model_type, device=device)
         vols = rollout_aligned(model, x0, teacher_states, Nt=Nt)
+        vols = _check_finite(vols, method)  # add this
         volumes_by_method[method] = vols
+
         del model
         if torch.cuda.is_available():
             torch.cuda.empty_cache()

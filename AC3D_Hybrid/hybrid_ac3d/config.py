@@ -8,7 +8,7 @@ DEVICE = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 
 # ——— Problem selector ———
 # One of: 'AC3D', 'CH3D', 'SH3D', 'MBE3D', 'PFC3D'
-PROBLEM = 'AC3D'   # <- set here when you want Swift–Hohenberg
+PROBLEM = 'CH3D'   # <- set here when you want Swift–Hohenberg
 
 # ——— Model ———
 MODEL = 'FNO4d'  # 'TNO3d' or 'FNO4d'
@@ -82,7 +82,7 @@ EPS2 = EPSILON_PARAM ** 2
 # ——— Data ———
 MAT_DATA_PATH = _spec['MAT_DATA_PATH']
 T_IN_CHANNELS = 4
-N_TRAIN = 50
+N_TRAIN = 200
 N_TEST = max(1, N_TRAIN // 4)
 SCALE_STEPS_WITH_NTRAIN = True   # set True to mimic "beam behavior"
 N_TRAIN_REF = 50                 # reference N_TRAIN that matches your current STEPS_PER_EPOCH
@@ -94,7 +94,7 @@ elif PROBLEM == 'PFC3D':
 elif PROBLEM == 'SH3D':
     STEPS_PER_EPOCH = 10  # SH3D
 elif PROBLEM == 'CH3D':
-    STEPS_PER_EPOCH = 25  # CH3D
+    STEPS_PER_EPOCH = 80  # CH3D
 elif PROBLEM == 'AC3D':
     STEPS_PER_EPOCH = 10  # AC3D
 

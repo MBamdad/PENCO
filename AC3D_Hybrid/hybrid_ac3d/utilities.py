@@ -8,7 +8,7 @@ from itertools import cycle
 
 import math
 from functions import (
-    mu_ac, physics_residual_midpoint, scheme_residual_fourier, loss_mm_projection,
+    physics_residual_midpoint, scheme_residual_fourier, loss_mm_projection,
     semi_implicit_step, energy_penalty, physics_residual_normalized,
      hminus1_mse  ,
     # ---- SH additions ----
@@ -343,7 +343,7 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
                 loss_energy = 0.03 * energy_penalty(u_in_last, y_hat, config.DX, config.EPS2)
 
 
-
+            # correct
             elif USE_CH:
                 # gentle ramps like SH/PFC/MBE
                 epoch_frac = ep / max(1, (config.EPOCHS - 1))
@@ -372,9 +372,9 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
 
                 x2 = torch.cat([x[..., 1:], y_hat], dim=-1)
                 y_hat2 = model(x2)
-                y_hat2 = physics_guided_update_ch_optimal(
-                    x2[..., -1:], y_hat2, alpha_cap=0.8, low_k_snap_frac=0.55
-                )
+                #y_hat2 = physics_guided_update_ch_optimal(
+                #    x2[..., -1:], y_hat2, alpha_cap=0.6, low_k_snap_frac=0.45
+                #)
                 loss_scheme2 = F.mse_loss(y_hat2, u_si2)
                 loss_scheme = w_scheme * (0.6 * loss_scheme1 + 0.4 * loss_scheme2)
 
@@ -535,9 +535,10 @@ def rollout_autoregressive(model, traj_np, T_in, Nt=100):
                 y_next = physics_guided_update_mbe_optimal(x[..., -1:], model(x), alpha_cap=0.6, low_k_snap_frac=0.45)
 
             elif config.PROBLEM == 'CH3D':
-                y_next = physics_guided_update_ch_optimal(
-                    x[..., -1:], model(x), alpha_cap=0.6, low_k_snap_frac=0.45
-                )
+                #y_next = physics_guided_update_ch_optimal(
+                #    x[..., -1:], model(x), alpha_cap=0.6, low_k_snap_frac=0.45
+                #)
+                y_next = y_next
 
             elif config.PROBLEM == 'AC3D':
                 y_next = physics_guided_update_ac_optimal(
