@@ -8,10 +8,10 @@ DEVICE = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 
 # ——— Problem selector ———
 # One of: 'AC3D', 'CH3D', 'SH3D', 'MBE3D', 'PFC3D'
-PROBLEM = 'CH3D'   # <- set here when you want Swift–Hohenberg
+PROBLEM = 'AC3D'   # <- set here when you want Swift–Hohenberg
 
 # ——— Model ———
-MODEL = 'FNO4d'  # 'TNO3d' or 'FNO4d'
+MODEL = 'TNO3d'  # 'TNO3d' or 'FNO4d'
 
 PROBLEM_SPECS = {
     'AC3D': dict(
@@ -47,7 +47,10 @@ PROBLEM_SPECS = {
         DT=5e-3,
         TOTAL_TIME_STEPS=100,
         EPSILON_PARAM=0.1,
-        MAT_DATA_PATH="/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/MBE3D_Augmented_600_Nt_101_Nx_32.mat",
+        #MAT_DATA_PATH="/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/MBE3D_Augmented_800_Nt_101_Nx_32.mat", # 0.05
+        MAT_DATA_PATH="/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/MBE3D_Augmented_600_Nt_101_Nx_32.mat", # 0.005
+        #MAT_DATA_PATH = "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/MBE3D_Augmented_650_Nt_101_Nx_32.mat", # dt=0.01
+        #MAT_DATA_PATH = "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/MBE3D_Augmented_610_Nt_101_Nx_32.mat", # dt=0.02
     ),
     'PFC3D': dict(
         GRID_RESOLUTION=32,
@@ -82,13 +85,13 @@ EPS2 = EPSILON_PARAM ** 2
 # ——— Data ———
 MAT_DATA_PATH = _spec['MAT_DATA_PATH']
 T_IN_CHANNELS = 4
-N_TRAIN = 200
+N_TRAIN = 50
 N_TEST = max(1, N_TRAIN // 4)
 SCALE_STEPS_WITH_NTRAIN = True   # set True to mimic "beam behavior"
 N_TRAIN_REF = 50                 # reference N_TRAIN that matches your current STEPS_PER_EPOCH
 
 if PROBLEM == 'MBE3D':
-    STEPS_PER_EPOCH = 25  # MBE  # pick once; same training budget regardless of N_TRAIN
+    STEPS_PER_EPOCH = 10  # MBE  # pick once; same training budget regardless of N_TRAIN
 elif PROBLEM == 'PFC3D':
     STEPS_PER_EPOCH = 5  # PFC
 elif PROBLEM == 'SH3D':
@@ -103,10 +106,13 @@ else:
 
 
 N_TEST_FIXED = 50 # 100 # 100 # 100             # <- constant, test set size is fixed now
+TEST_MODE = 'manual'   # or 'manual'
+TEST_PICK = 1       # 0 spherical   # only used if TEST_MODE == 'manual'
+
 PURE_PHYSICS_USE_ALL = True    # <- when PDE_WEIGHT==1.0, ignore N_TRAIN for train
 
 # ——— FNO4d / TNO3d ———
-if PROBLEM == 'AC3D':
+if PROBLEM == 'MBE3D':
     MODES = 10 # 12  # Or whatever value was used during training
     WIDTH = 10 # 12 # This is the most likely one to change
 else:
@@ -120,7 +126,7 @@ N_LAYERS = 2
 # ——— Training ———
 EPOCHS = 50
 BATCH_SIZE = 8
-LEARNING_RATE = 1e-3 # 3e-4 --> CH3d 1e-3 --> AC3d
+LEARNING_RATE = 1e-3 # --> MBE,  all other PDEs is 1e-3
 WEIGHT_DECAY = 1e-5
 PDE_WEIGHT = 0.25
 

@@ -21,6 +21,7 @@ def main():
     print('MODEL name is: ', config.MODEL)
     print('Problem is: ', config.PROBLEM)
     print('N_Train is: ', config.N_TRAIN)
+    print('STEPS_PER_EPOCH is: ', config.STEPS_PER_EPOCH)
 
     # (tiny clarity prints; no behavioral change)
     print(f"Grid: N={config.GRID_RESOLUTION}, L={config.L_DOMAIN:g}, dx={config.DX:g}")

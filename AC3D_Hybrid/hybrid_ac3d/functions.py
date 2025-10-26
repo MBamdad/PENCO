@@ -1056,7 +1056,7 @@ def _k_axes_phys(S, dx, device, dtype):
     kv = torch.cat([torch.arange(0, half + 1, device=device),
                     torch.arange(-half + 1, 0, device=device)], dim=0).to(dtype)
     return (2.0 * _math.pi / L) * kv  # (S,)
-
+'''''
 def semi_implicit_step_mbe(u_in, dt, dx, eps):
     """
     One MBE3D semi-implicit step (matches the MATLAB generator):
@@ -1107,6 +1107,56 @@ def semi_implicit_step_mbe(u_in, dt, dx, eps):
     v_hat = s_hat / (denom + 1e-12)
     up = torch.fft.ifftn(v_hat, dim=(1,2,3)).real
     return up.unsqueeze(-1).to(u_in.dtype)
+'''
+
+
+# --- at top of functions.py (near imports) ---
+_MBES2_MAX = 36.0  # gentle cap for |∇u|^2 (tunable: 16..64 works well)
+
+def _cap_s2(s2, cap=_MBES2_MAX):
+    # inplace-free, differentiable cap
+    return torch.clamp(s2, max=cap)
+
+def semi_implicit_step_mbe(u_in, dt, dx, eps):
+    """
+    Robust MBE3D semi-implicit, computed in float64 to avoid overflow/underflow.
+    """
+    u = u_in.squeeze(-1).to(torch.float64)      # promote to float64
+    B, Sx, Sy, Sz = u.shape
+    device = u.device
+
+    # physical k like MATLAB
+    def _k_axes_phys64(S, dx):
+        L = S * dx
+        half = S // 2
+        kv = torch.cat([torch.arange(0, half + 1, device=device),
+                        torch.arange(-half + 1, 0, device=device)], dim=0).to(torch.float64)
+        return (2.0 * np.pi / L) * kv
+
+    kx = _k_axes_phys64(Sx, dx); ky = _k_axes_phys64(Sy, dx); kz = _k_axes_phys64(Sz, dx)
+    PX, QY, RZ = torch.meshgrid(1j*kx, 1j*ky, 1j*kz, indexing='ij')
+    K2 = (PX/(1j))**2 + (QY/(1j))**2 + (RZ/(1j))**2  # real, >=0 (float64)
+
+    U = torch.fft.fftn(u, dim=(1,2,3))
+
+    fx = torch.fft.ifftn(PX * U, dim=(1,2,3)).real
+    fy = torch.fft.ifftn(QY * U, dim=(1,2,3)).real
+    fz = torch.fft.ifftn(RZ * U, dim=(1,2,3)).real
+
+    s2 = fx*fx + fy*fy + fz*fz
+    s2 = _cap_s2(s2)  # <--- important OOD stabilizer
+
+    f1 = s2 * fx; f2 = s2 * fy; f3 = s2 * fz
+    div_hat = PX * torch.fft.fftn(f1, dim=(1,2,3)) \
+            + QY * torch.fft.fftn(f2, dim=(1,2,3)) \
+            + RZ * torch.fft.fftn(f3, dim=(1,2,3))
+
+    s_hat = torch.fft.fftn(u / dt, dim=(1,2,3)) + div_hat
+    denom = (1.0 / dt) - K2 + float(eps) * (K2 ** 2)
+
+    v_hat = s_hat / (denom + 1e-16)  # slightly larger epsilon in 64-bit
+    up = torch.fft.ifftn(v_hat, dim=(1,2,3)).real
+    return up.to(torch.float32).unsqueeze(-1)   # return in float32
 
 def _scheme_residual_fourier_mbe(u0, up, dt, dx, eps):
     """
@@ -1129,6 +1179,7 @@ def _scheme_residual_fourier_mbe(u0, up, dt, dx, eps):
     fy = torch.fft.ifftn(QY * U0, dim=(1,2,3)).real
     fz = torch.fft.ifftn(RZ * U0, dim=(1,2,3)).real
     s2 = fx*fx + fy*fy + fz*fz
+    s2 = _cap_s2(s2)
     f1, f2, f3 = s2*fx, s2*fy, s2*fz
     div_hat = PX * torch.fft.fftn(f1, dim=(1,2,3)) \
             + QY * torch.fft.fftn(f2, dim=(1,2,3)) \
@@ -1158,7 +1209,8 @@ def physics_collocation_tau_L2_MBE(u_in, u_pred,
     u_tau = (1.0 - tau) * u0 + tau * up
 
     ux, uy, uz = grad_fourier(u_tau, dx)
-    s2 = ux*ux + uy*uy + uz*uz
+    s2 = _cap_s2(ux * ux + uy * uy + uz * uz)  # <--- cap here too
+    #s2 = ux*ux + uy*uy + uz*uz
     # (optional) gentle clamp to avoid rare spiky batches; remove if undesired:
     # s2 = torch.clamp(s2, max=36.0)
 

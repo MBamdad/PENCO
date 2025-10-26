@@ -332,7 +332,8 @@ def main():
                     STEPS_PER_EPOCH_EFF = base_steps
 
                 setattr(CFG, "STEPS_PER_EPOCH_EFF", STEPS_PER_EPOCH_EFF)
-                total_steps = CFG.EPOCHS * STEPS_PER_EPOCH_EFF
+                #total_steps = CFG.EPOCHS * STEPS_PER_EPOCH_EFF
+                total_steps = CFG.N_TRAIN_REF * STEPS_PER_EPOCH_EFF
                 print(f"[Budget] N_TRAIN={CFG.N_TRAIN} (actual={getattr(CFG,'N_TRAIN_ACTUAL',CFG.N_TRAIN)}), "
                       f"steps/epoch={STEPS_PER_EPOCH_EFF}, total={total_steps}")
                 # ===================================================================

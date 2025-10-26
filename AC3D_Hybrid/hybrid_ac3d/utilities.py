@@ -101,62 +101,7 @@ def make_windowed_collate(T_in=4, t_min=None, t_max=None, normalized=False, norm
 # ---------------------
 # Loaders (your preferred split API)
 # ---------------------
-'''
-# Original
-def build_loaders():
-    rng = np.random.default_rng(config.SEED)
 
-    # --- read Ns from the file (last dim of phi: (Nz,Ny,Nx,Nt,Ns)) ---
-    with h5py.File(config.MAT_DATA_PATH, "r") as f:
-        Ns = int(f["phi"].shape[-1])
-
-    # ids = 0..Ns-1, shuffled
-    all_ids = np.arange(Ns)
-    rng.shuffle(all_ids)
-
-    # --- clamp splits so they sum to Ns and never go negative ---
-    n_train_req = int(config.N_TRAIN)
-    n_test_req  = int(config.N_TEST)
-
-    n_train = min(max(0, n_train_req), Ns)                 # 0..Ns
-    # try to keep requested test size, but not beyond remaining
-    n_test  = min(max(1, n_test_req), max(0, Ns - n_train))  # at least 1 if possible
-    # if there isn't room for a test set (e.g., Ns==1), force n_test=0 and shrink n_train
-    if n_test == 0 and Ns >= 1:
-        n_train = max(0, Ns - 1)
-        n_test  = 1
-
-    n_unused = Ns - n_train - n_test
-    assert n_unused >= 0, "Split sizes exceed dataset size."
-
-    # build the base dataset over ALL ids so RAM loader knows Ns
-    base = AC3DTrajectoryDataset(config.MAT_DATA_PATH, all_ids)
-
-    # split into train/test/unused
-    train_dataset, test_dataset, _ = random_split(
-        base, [n_train, n_test, n_unused],
-        generator=torch.Generator().manual_seed(config.SEED)
-    )
-
-    normalizers = [base.normalizer_x, base.normalizer_y]
-
-    collate = make_windowed_collate(
-        T_in=config.T_IN_CHANNELS, t_min=0, t_max=config.TOTAL_TIME_STEPS-1,
-        normalized=False, normalizers=normalizers
-    )
-
-    train_loader = DataLoader(train_dataset, batch_size=config.BATCH_SIZE, shuffle=True,
-                              num_workers=4, pin_memory=True, persistent_workers=True,
-                              collate_fn=collate)
-    test_loader = DataLoader(test_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
-                             num_workers=2, pin_memory=True, persistent_workers=True,
-                             collate_fn=collate)
-
-    # deterministic list of test IDs (after the train split)
-    test_indices = all_ids[n_train:n_train + n_test].tolist()
-
-    return train_loader, test_loader, test_indices, normalizers
-'''
 
 def build_loaders():
     rng = np.random.default_rng(config.SEED)
@@ -432,9 +377,10 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
                 tau_off = 1.0 / (2.0 * math.sqrt(5.0))
                 l_tau1 = physics_collocation_tau_L2_MBE(u_in_last, y_hat, tau=(0.5 - tau_off))
                 l_tau2 = physics_collocation_tau_L2_MBE(u_in_last, y_hat, tau=(0.5 + tau_off))
-                l_tau_mid = physics_collocation_tau_L2_MBE(u_in_last, y_hat, tau=0.5)
+                #l_tau_mid = physics_collocation_tau_L2_MBE(u_in_last, y_hat, tau=0.5)
                 # like SH/PFC: use the average as the "midpoint" residual
-                l_mid_norm = 0.25 * (l_tau1 + l_tau2) + 0.50 * l_tau_mid
+                #l_mid_norm = 0.25 * (l_tau1 + l_tau2) + 0.50 * l_tau_mid
+                l_mid_norm = 0.5 * (l_tau1 + l_tau2)
 
                 # --- teacher consistency (semi-implicit MBE), same structure as SH/PFC ---
                 u_si1 = semi_implicit_step_mbe(u_in_last, config.DT, config.DX, config.EPSILON_PARAM)
@@ -444,7 +390,7 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
                 x2 = torch.cat([x[..., 1:], y_hat], dim=-1)
                 y_hat2 = model(x2)
                 # optional gentle PGU (like SH/PFC)
-                y_hat2 = physics_guided_update_mbe_optimal(y_hat, y_hat2, alpha_cap=0.6, low_k_snap_frac=0.45)
+                #y_hat2 = physics_guided_update_mbe_optimal(y_hat, y_hat2, alpha_cap=0.6, low_k_snap_frac=0.45)
                 loss_scheme2 = F.mse_loss(y_hat2, u_si2)
                 loss_scheme = w_scheme * (0.6 * loss_scheme1 + 0.4 * loss_scheme2)
 
@@ -452,13 +398,13 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
                 l_lowk = low_k_mse(y_hat, u_si1, frac=0.50)
 
                 # --- physics mix (same scale as SH/PFC) ---
-                loss_phys = 6e-3 * (1.0 * l_fft + 0.7 * l_mid_norm + w_lowk * 0.40 * l_lowk)
+                loss_phys = 6e-3 * (1.0 * l_fft + l_mid_norm + w_lowk * 0.40 * l_lowk)
 
                 # --- convex energy hinge for MBE (slope-selection energy), gentle weight like SH/PFC ---
                 loss_energy = 0.03 * energy_penalty_mbe(u_in_last, y_hat, config.DX, config.EPSILON_PARAM)
 
                 # (optional) very soft mass conservation penalty; small so it behaves like a regularizer
-                loss_phys = loss_phys + 0.01 * mass_penalty(u_in_last, y_hat)
+                #loss_phys = loss_phys + 0.01 * mass_penalty(u_in_last, y_hat)
 
             else:
                 raise RuntimeError(f"Unknown/unsupported PROBLEM: {config.PROBLEM}")
@@ -564,6 +510,12 @@ def evaluate_stats_and_plot(model, mat_path, test_ids, times):
     import h5py, numpy as np
     import matplotlib.pyplot as plt
 
+    def sym_vlims(A, sym_frac=0.995):
+        m = np.mean(A)
+        a = np.quantile(np.abs(A - m), sym_frac)
+        return m - a, m + a
+
+
     with h5py.File(mat_path, "r") as f:
         dset = f["phi"]  # (Nz,Ny,Nx,Nt,Ns)
         Nz, Ny, Nx, Nt, Ns = dset.shape
@@ -572,7 +524,15 @@ def evaluate_stats_and_plot(model, mat_path, test_ids, times):
         rel_errors = {t: [] for t in times}
 
         # pick first test id for plotting
-        pid = int(test_ids[0])
+        #pid = int(test_ids[0])
+        mode = getattr(config, "TEST_MODE", "random")
+        if mode == "manual":
+            pick = int(getattr(config, "TEST_PICK", 0))
+            pid = int(test_ids[pick % len(test_ids)])  # pick a specific ID from the already-random test_ids
+        else:
+            pid = int(test_ids[0])
+        print(f"[Eval] Visualization sample id (from test_ids): {pid}")
+
         gt_raw = np.array(dset[:, :, :, :, pid], dtype=np.float32)  # (Nz,Ny,Nx,Nt)
         gt = np.transpose(gt_raw, (3,2,1,0))                        # (Nt,Nx,Ny,Nz)
         pred = rollout_autoregressive(model, gt, config.T_IN_CHANNELS,
@@ -608,9 +568,14 @@ def evaluate_stats_and_plot(model, mat_path, test_ids, times):
             predt = pred[t, :, :, zc]
             rel   = np.abs(predt - exact) / (np.abs(exact) + 1e-8)
 
-            im0 = axes[0, j].imshow(exact, origin='lower', cmap='RdBu_r', vmin=-1, vmax=1)
+            v0, V0 = sym_vlims(exact)
+            v1, V1 = sym_vlims(predt)
+            im0 = axes[0, j].imshow(exact, origin='lower', cmap='RdBu_r', vmin=v0, vmax=V0)
+            im1 = axes[1, j].imshow(predt, origin='lower', cmap='RdBu_r', vmin=v1, vmax=V1)
+
+            #im0 = axes[0, j].imshow(exact, origin='lower', cmap='RdBu_r', vmin=-1, vmax=1)
             axes[0, j].set_title(f"Exact t={t}");  fig.colorbar(im0, ax=axes[0, j], shrink=0.8)
-            im1 = axes[1, j].imshow(predt, origin='lower', cmap='RdBu_r', vmin=-1, vmax=1)
+            #im1 = axes[1, j].imshow(predt, origin='lower', cmap='RdBu_r', vmin=-1, vmax=1)
             axes[1, j].set_title(f"Pred t={t}");   fig.colorbar(im1, ax=axes[1, j], shrink=0.8)
             im2 = axes[2, j].imshow(rel, origin='lower', cmap='viridis')
             axes[2, j].set_title(f"Rel. L2 (px) t={t}"); fig.colorbar(im2, ax=axes[2, j], shrink=0.8)

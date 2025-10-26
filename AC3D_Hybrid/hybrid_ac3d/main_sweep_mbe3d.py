@@ -209,9 +209,9 @@ def train_fno_hybrid_LOGGING_STEPBASED(model, train_loader, test_loader, optimiz
             tau_off = 1.0 / (2.0 * math.sqrt(5.0))
             l_tau1 = physics_collocation_tau_L2_MBE(u_in_last, y_hat, tau=(0.5 - tau_off))
             l_tau2 = physics_collocation_tau_L2_MBE(u_in_last, y_hat, tau=(0.5 + tau_off))
-            l_tau_mid = physics_collocation_tau_L2_MBE(u_in_last, y_hat, tau=0.5)
-            l_mid_norm = 0.25 * (l_tau1 + l_tau2) + 0.50 * l_tau_mid
-
+            #l_tau_mid = physics_collocation_tau_L2_MBE(u_in_last, y_hat, tau=0.5)
+            #l_mid_norm = 0.25 * (l_tau1 + l_tau2) + 0.50 * l_tau_mid
+            l_mid_norm = 0.5 * (l_tau1 + l_tau2)
             # teacher consistency (+ one more gentle step)
             u_si1 = semi_implicit_step_mbe(u_in_last, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)
             loss_scheme1 = F.mse_loss(y_hat, u_si1)
@@ -219,7 +219,7 @@ def train_fno_hybrid_LOGGING_STEPBASED(model, train_loader, test_loader, optimiz
                 u_si2 = semi_implicit_step_mbe(u_si1, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)
             x2 = torch.cat([x[..., 1:], y_hat], dim=-1)
             y_hat2 = model(x2)
-            y_hat2 = physics_guided_update_mbe_optimal(y_hat, y_hat2, alpha_cap=0.6, low_k_snap_frac=0.45)
+            #y_hat2 = physics_guided_update_mbe_optimal(y_hat, y_hat2, alpha_cap=0.6, low_k_snap_frac=0.45)
             loss_scheme2 = F.mse_loss(y_hat2, u_si2)
             loss_scheme = w_scheme * (0.6 * loss_scheme1 + 0.4 * loss_scheme2)
 
@@ -227,11 +227,11 @@ def train_fno_hybrid_LOGGING_STEPBASED(model, train_loader, test_loader, optimiz
             l_lowk = low_k_mse(y_hat, u_si1, frac=0.50)
 
             # physics mix (scale identical to utilities)
-            loss_phys = 6e-3 * (1.0 * l_fft + 0.7 * l_mid_norm + w_lowk * 0.40 * l_lowk)
+            loss_phys = 6e-3 * (1.0 * l_fft + l_mid_norm + w_lowk * 0.40 * l_lowk)
 
             # energy hinge + tiny mass regularizer
             loss_energy = 0.03 * energy_penalty_mbe(u_in_last, y_hat, CFG.DX, CFG.EPSILON_PARAM)
-            loss_phys = loss_phys + 0.01 * mass_penalty(u_in_last, y_hat)
+            #loss_phys = loss_phys + 0.01 * mass_penalty(u_in_last, y_hat)
 
             # total loss
             loss_total = (1.0 - pde_weight) * loss_data + pde_weight * (loss_phys + loss_scheme + loss_energy)
@@ -329,12 +329,13 @@ def main():
                     STEPS_PER_EPOCH_EFF = base_steps                                           # <<< CHANGED
 
                 setattr(CFG, "STEPS_PER_EPOCH_EFF", STEPS_PER_EPOCH_EFF)                        # <<< CHANGED
-                total_steps = CFG.EPOCHS * STEPS_PER_EPOCH_EFF                                   # <<< CHANGED
+                #total_steps = CFG.EPOCHS * STEPS_PER_EPOCH_EFF                                   # <<< CHANGED
+                total_steps = CFG.N_TRAIN_REF * STEPS_PER_EPOCH_EFF
                 print(f"[Budget] N_TRAIN={CFG.N_TRAIN} (actual={getattr(CFG,'N_TRAIN_ACTUAL',CFG.N_TRAIN)}), "
                       f"steps/epoch={STEPS_PER_EPOCH_EFF}, total={total_steps}")                 # <<< CHANGED
                 # ==============================================================================
 
-                rep_test_id = int(test_ids[0])
+                rep_test_id = int(test_ids[4]) # 0
 
                 model = _init_model(model_name)
                 optimizer = Adam(model.parameters(), lr=CFG.LEARNING_RATE, weight_decay=CFG.WEIGHT_DECAY)

@@ -10,7 +10,7 @@ from scipy.ndimage import zoom as nd_zoom
 # --- repo imports (your files) ---
 import config as CFG
 from networks import FNO4d, TNO3d
-from functions import semi_implicit_step, semi_implicit_step_pfc
+from functions import semi_implicit_step, semi_implicit_step_pfc, semi_implicit_step_mbe
 
 # -------------------------------------------------------------------
 # 1) PROBLEM-SPECIFIC CONFIGURATIONS
@@ -66,7 +66,7 @@ CKPTS_SH3D = {
                     "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/TNO3d_PurePhysics_N200_pw1.00_E50.pt"),
 }
 
-# --- Checkpoints for SH3D ---
+# --- Checkpoints for PFC3D ---
 CKPTS_PFC3D = {
     # method_label: (model_type, path)
     "FNO4d": ("FNO4d",
@@ -82,7 +82,20 @@ CKPTS_PFC3D = {
                     "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/PFC3d_models/TNO3d_PurePhysics_N200_pw1.00_E50.pt"),
 }
 
-
+# --- Checkpoints for MBE3D ---
+CKPTS_MBE3D = {
+    # method_label: (model_type, path)
+    "FNO4d": ("FNO4d",
+              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/MBE3d_models/FNO4d_FNO4d_N200_pw0.00_E50.pt"),
+    "MHNO": ("TNO3d",
+             "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/MBE3d_models/TNO3d_MHNO_N200_pw0.00_E50.pt"),
+    "PENCO-MHNO": ("TNO3d",
+                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/MBE3d_models/TNO3d_PENCO_N200_pw0.25_E50.pt"),
+    "PENCO-FNO": ("FNO4d",
+                  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/MBE3d_models/FNO4d_PENCO_N200_pw0.25_E50.pt"),
+    "PurePhysics": ("TNO3d",
+                    "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/MBE3d_models/TNO3d_PurePhysics_N200_pw1.00_E50.pt"),
+}
 
 # --- Dynamic selection based on CFG.PROBLEM ---
 if CFG.PROBLEM == 'AC3D':
@@ -107,7 +120,12 @@ elif CFG.PROBLEM == 'PFC3D':
     METHODS = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]  # <- now 5 like AC3D
     IC_FUNCTION = 'create_initial_condition_star_pfc3d'
     IC_TYPE = 'star'
-
+elif CFG.PROBLEM == 'MBE3D':
+    CKPTS = CKPTS_MBE3D
+    METHODS = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]
+    #IC_FUNCTION = 'create_initial_condition_torus_mbe3d'
+    IC_FUNCTION ='create_initial_condition_sphere_mbe3d'
+    IC_TYPE = 'sphere' # torus   sphere
 else:
     raise ValueError(f"Problem '{CFG.PROBLEM}' not configured in this script.")
 
@@ -245,6 +263,75 @@ def create_initial_condition_sphere_pfc3d():
 
     return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
 
+def create_initial_condition_torus_mbe3d():
+    S = CFG.GRID_RESOLUTION
+    L = CFG.L_DOMAIN
+    epsilon = CFG.EPSILON_PARAM
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
+    selected_frames = [0, 20, 40, 60, 80, 100]
+
+    # grid
+    xx, yy, zz = _grid(S, L)
+
+    # torus geometry (inside [-π, π]^3 like the dataset)
+    R = 1.9
+    r0 = 1.0
+    rho = np.sqrt(xx**2 + yy**2)
+    phi = r0 - np.sqrt((rho - R)**2 + zz**2)
+
+    # >>> MATCH THE DATASET INTERFACE WIDTH <<<
+    hx = L / S
+    w = max(3.0 * hx, 2.0 * epsilon)
+
+    u0 = np.tanh(phi / w).astype(np.float32)
+
+    # >>> MATCH THE DATASET PREPROCESSING <<<
+    u0 = u0 - np.float32(u0.mean())          # zero-mean like generator
+    u0 = np.clip(u0, -0.999, 0.999)          # gentle clamp
+
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
+
+def create_initial_condition_sphere_mbe3d():
+    """
+    Smooth tanh sphere IC for MBE3D, consistent with the dataset:
+      - Domain: [-L/2, L/2]^3 with S^3 grid
+      - Radius ~ 1.5
+      - Interface thickness w ≈ 4*epsilon (with a grid-based lower bound)
+      - Zero-mean and gentle clamp to (-0.999, 0.999)
+    Returns:
+      u0: (S,S,S) float32
+      domain_lengths: (L,L,L)
+      grid_sizes: (S,S,S)
+      Nt, dt, selected_frames
+    """
+    S = CFG.GRID_RESOLUTION
+    L = CFG.L_DOMAIN
+    epsilon = CFG.EPSILON_PARAM
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
+    selected_frames = [0, 20, 40, 60, 80, 100]
+
+    # grid
+    xx, yy, zz = _grid(S, L)
+
+    # sphere geometry (centered; matches MBE dataset scale)
+    R = 0.9  # sphere radius used in the MATLAB generator 1.5
+    r = np.sqrt(xx**2 + yy**2 + zz**2)
+    phi = R - r
+
+    # interface width: match dataset (≈ 4*epsilon), but not thinner than ~3 grid cells
+    hx = L / S
+    w = max(1.0 * hx, 4.0 * float(epsilon)) # from 3 to 9
+
+    # smooth phase field
+    u0 = np.tanh(phi / w).astype(np.float32)
+
+    # dataset-style preprocessing: zero-mean, gentle clamp
+    u0 = u0 - np.float32(u0.mean())
+    u0 = np.clip(u0, -0.999, 0.999)
+
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
 
 # ----------------------------------------------------
 # 3) Model Loading
@@ -323,6 +410,8 @@ def bootstrap_states_from_u0(u0_np: np.ndarray, T_in: int, device: torch.device)
             u = semi_implicit_step_pfc(u, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)
         elif CFG.PROBLEM == 'CH3D':
             u = semi_implicit_step_ch3d(u, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)  # <<< use CH step
+        elif CFG.PROBLEM == 'MBE3D':
+            u = semi_implicit_step_mbe(u, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)   # <<< MBE teacher
         else:
             u = semi_implicit_step(u, CFG.DT, CFG.DX, CFG.EPS2)  # AC/SH path as before
         states.append(u)
