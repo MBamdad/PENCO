@@ -5,164 +5,512 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from skimage.measure import marching_cubes
 from scipy.io import savemat
-from scipy.ndimage import zoom as nd_zoom  # for smooth upsampling
+from scipy.ndimage import zoom as nd_zoom
 
 # --- repo imports (your files) ---
 import config as CFG
 from networks import FNO4d, TNO3d
-from functions import semi_implicit_step
+from functions import semi_implicit_step, semi_implicit_step_pfc, physics_guided_update_mbe_optimal, semi_implicit_step_mbe, physics_guided_update_mbe_optimal, mass_project_pred
 
-# -----------------------------
-# 1) Paths to your checkpoints
-# -----------------------------
-CKPTS = {
-    "FNO4d":      "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/AC3D/FNO4d_FNO4d_N200_pw0.00_E50.pt",
-    "MHNO":       "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/AC3D/TNO3d_MHNO_N200_pw0.00_E50.pt",
-    # RENAMED: previous 'PENCO' -> 'PENCO-MHNO' (TNO3d backbone)
-    "PENCO-MHNO": "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/AC3D/TNO3d_PENCO_N200_pw0.25_E50.pt",
-    # ADDED: FNO4d + PENCO
-    "PENCO-FNO":  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/AC3D/FNO4d_PENCO_N200_pw0.25_E50.pt",
-    "PurePhysics":"/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/Models/AC3D/TNO3d_PurePhysics_N200_pw1.00_E50.pt",
+# -------------------------------------------------------------------
+# 1) PROBLEM-SPECIFIC CONFIGURATIONS
+#    - Selects checkpoints, methods, and initial conditions
+#      based on the PROBLEM variable in config.py
+# -------------------------------------------------------------------
+
+# --- Checkpoints for AC3D ---
+CKPTS_AC3D = {
+    # method_label: (model_type, path)
+    "FNO4d": ("FNO4d",
+              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/AC3d_models/FNO4d_FNO4d_N200_pw0.00_E50.pt"),
+    "MHNO": ("TNO3d",
+             "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/AC3d_models/TNO3d_MHNO_N200_pw0.00_E50.pt"),
+    "PENCO-MHNO": ("TNO3d",
+                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/AC3d_models/TNO3d_PENCO_N200_pw0.25_E50.pt"),
+    "PENCO-FNO": ("FNO4d",
+                  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/AC3d_models/FNO4d_PENCO_N200_pw0.25_E50.pt"),
+    "PurePhysics": ("TNO3d",
+                    "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/AC3d_models/TNO3d_PurePhysics_N200_pw1.00_E50.pt"),
 }
 
+# --- Checkpoints for CH3D ---
+CKPTS_CH3D = {
+    # method_label: (model_type, path)
+    "FNO4d": ("FNO4d",
+              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/FNO4d_FNO4d_N200_pw0.00_E50.pt"),
+    "MHNO": ("TNO3d",
+             "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/TNO3d_MHNO_N200_pw0.00_E50.pt"),
+    # NEW: split PENCO into two variants for CH3D (as in AC3D)
+    "PENCO-MHNO": ("TNO3d",
+                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/TNO3d_PENCO_N200_pw0.25_E50.pt"),
+    "PENCO-FNO": ("FNO4d",
+                  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/FNO4d_PENCO_N200_pw0.25_E50.pt"),
+    "PurePhysics": ("TNO3d",
+                    "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/FNO4d_PurePhysics_N200_pw1.00_E200.pt"),
+}
+
+
+# --- Checkpoints for SH3D ---
+CKPTS_SH3D = {
+    # method_label: (model_type, path)
+    "FNO4d": ("FNO4d",
+              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/FNO4d_FNO4d_N50_pw0.00_E50.pt"),
+    "MHNO": ("TNO3d",
+             "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/TNO3d_MHNO_N200_pw0.00_E50.pt"),
+    # NEW: split PENCO into two variants for CH3D (as in AC3D)
+    "PENCO-MHNO": ("TNO3d",
+                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/TNO3d_PENCO_N200_pw0.75_E50.pt"),
+    "PENCO-FNO": ("FNO4d",
+                  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/FNO4d_PENCO_N200_pw0.75_E50.pt"),
+    "PurePhysics": ("TNO3d",
+                    "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/TNO3d_PurePhysics_N200_pw1.00_E50.pt"),
+}
+
+# --- Checkpoints for PFC3D ---
+CKPTS_PFC3D = {
+    # method_label: (model_type, path)
+    "FNO4d": ("FNO4d",
+              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/PFC3d_models/FNO4d_FNO4d_N50_pw0.00_E50.pt"),
+    "MHNO": ("TNO3d",
+             "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/PFC3d_models/TNO3d_MHNO_N200_pw0.00_E50.pt"),
+    # NEW: split PENCO into two variants for CH3D (as in AC3D)
+    "PENCO-MHNO": ("TNO3d",
+                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/PFC3d_models/TNO3d_PENCO_N200_pw0.75_E50.pt"),
+    "PENCO-FNO": ("FNO4d",
+                  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/PFC3d_models/FNO4d_PENCO_N200_pw0.75_E50.pt"),
+    "PurePhysics": ("TNO3d",
+                    "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/PFC3d_models/TNO3d_PurePhysics_N200_pw1.00_E50.pt"),
+}
+
+
+# --- Checkpoints for SH3D ---
+CKPTS_MBE3D = {
+    # method_label: (model_type, path)
+    "FNO4d": ("FNO4d",
+              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/MBE3d_models/FNO4d_FNO4d_N200_pw0.00_E50.pt"),
+    "MHNO": ("TNO3d",
+             "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/MBE3d_models/TNO3d_MHNO_N200_pw0.00_E50.pt"),
+    # NEW: split PENCO into two variants for CH3D (as in AC3D)
+    "PENCO-MHNO": ("TNO3d",
+                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/MBE3d_models/TNO3d_PENCO_N200_pw0.25_E50.pt"),
+    "PENCO-FNO": ("FNO4d",
+                  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/MBE3d_models/FNO4d_PENCO_N200_pw0.25_E50.pt"),
+    "PurePhysics": ("TNO3d",
+                    "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/MBE3d_models/TNO3d_PurePhysics_N200_pw1.00_E50.pt"),
+}
+
+
+# --- Dynamic selection based on CFG.PROBLEM ---
+if CFG.PROBLEM == 'AC3D':
+    CKPTS = CKPTS_AC3D
+    METHODS = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]
+    IC_FUNCTION = 'create_initial_condition_sphere_ac3d'
+    IC_TYPE = 'sphere'
+elif CFG.PROBLEM == 'CH3D':
+    CKPTS = CKPTS_CH3D
+    METHODS = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]  # <- now 5 like AC3D
+    #IC_FUNCTION = 'create_initial_condition_star_ch3d'
+    IC_FUNCTION = 'create_initial_condition_sphere_ch3d'
+    #IC_TYPE = 'star'
+    IC_TYPE = 'sphere'
+elif CFG.PROBLEM == 'SH3D':
+    CKPTS = CKPTS_SH3D
+    METHODS = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]
+    IC_FUNCTION = 'create_initial_condition_sphere_sh3d'
+    IC_TYPE = 'sphere'
+elif CFG.PROBLEM == 'PFC3D':
+    CKPTS = CKPTS_PFC3D
+    METHODS = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]  # <- now 5 like AC3D
+    IC_FUNCTION = 'create_initial_condition_star_pfc3d'
+    IC_TYPE = 'star'
+elif CFG.PROBLEM == 'MBE3D':
+    CKPTS = CKPTS_MBE3D
+    METHODS = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]  # <- now 5 like AC3D
+    #IC_FUNCTION = 'create_initial_condition_star_mbe3d'
+    #IC_FUNCTION = 'create_initial_condition_torus_mbe3d'
+    IC_FUNCTION = 'create_initial_condition_sphere_mbe3d'
+    IC_TYPE = 'sphere' # torus # star # sphere
+
+
+else:
+    raise ValueError(f"Problem '{CFG.PROBLEM}' not configured in this script.")
+
 # -----------------------------------
-# 2) Sphere initial condition (AC3D)
+# 2) Initial Conditions
 # -----------------------------------
+def _grid(S, L):
+    """Helper to create a 3D grid."""
+    x = np.linspace(-0.5 * L, 0.5 * L, S, endpoint=False)
+    y = z = x
+    return np.meshgrid(x, y, z, indexing="ij")
+
+
 def create_initial_condition_sphere_ac3d():
-    Nx = Ny = Nz = 32
-    Nt = 100
-    Lx = Ly = Lz = 2.0
-    epsilon = 0.1
-    dt = float(CFG.DT)             # single source of truth for dt
+    """Generates the sphere IC for the AC3D problem."""
+    S = CFG.GRID_RESOLUTION
+    L = CFG.L_DOMAIN
+    epsilon = CFG.EPSILON_PARAM
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
     selected_frames = [0, 20, 40, 60, 80, 100]
 
     radius = 0.5
-    x_grid = np.linspace(-Lx/2, Lx/2, Nx)
-    y_grid = np.linspace(-Ly/2, Ly/2, Ny)
-    z_grid = np.linspace(-Lz/2, Lz/2, Nz)
-    xx, yy, zz = np.meshgrid(x_grid, y_grid, z_grid, indexing='ij')
+    xx, yy, zz = _grid(S, L)
     interface_width = np.sqrt(2.0) * epsilon
-    u0 = np.tanh((radius - np.sqrt(xx**2 + yy**2 + zz**2)) / interface_width).astype(np.float32)
+    u0 = np.tanh((radius - np.sqrt(xx ** 2 + yy ** 2 + zz ** 2)) / interface_width).astype(np.float32)
 
-    return u0, (Lx, Ly, Lz), (Nx, Ny, Nz), Nt, dt, selected_frames
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
+
+def create_initial_condition_sphere_ch3d():
+    """Generates the sphere IC for the AC3D problem."""
+    S = CFG.GRID_RESOLUTION
+    L = CFG.L_DOMAIN
+    epsilon = CFG.EPSILON_PARAM
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
+    selected_frames = [0, 20, 40, 60, 80, 100]
+
+    radius = 0.5
+    xx, yy, zz = _grid(S, L)
+    interface_width = np.sqrt(9.0) * epsilon
+    u0 = np.tanh((radius - np.sqrt(xx ** 2 + yy ** 2 + zz ** 2)) / interface_width).astype(np.float32)
+
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
+def create_initial_condition_star_ch3d():
+    """Generates the star IC for the CH3D problem."""
+    S = CFG.GRID_RESOLUTION
+    L = CFG.L_DOMAIN
+    epsilon = CFG.EPSILON_PARAM
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
+    selected_frames = [0, 20, 40, 60, 80, 100]
+
+    xx, yy, zz = _grid(S, L)
+    r = np.sqrt(xx ** 2 + yy ** 2 + zz ** 2) + 1e-9
+
+    # Spherical coordinates to create star shape
+    theta = np.arccos(np.clip(zz / r, -1.0, 1.0))  # polar
+    phi = np.arctan2(yy, xx)  # azimuth
+
+    base_r = 0.5
+    amp = 0.10
+    freq = 6 # 5
+
+    mod = 1.0 + amp * (np.cos(freq * theta) * np.cos(freq * phi))
+    r_star = base_r * mod
+    sdf = r_star - r
+
+    u0 = np.tanh(sdf / (np.sqrt(2) * epsilon)).astype(np.float32)
+
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
+
+def create_initial_condition_sphere_sh3d():
+    """Generates the sphere IC for the SH3D problem (identical profile to AC)."""
+    S = CFG.GRID_RESOLUTION
+    L = CFG.L_DOMAIN
+    epsilon = CFG.EPSILON_PARAM
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
+    selected_frames = [0, 20, 40, 60, 80, 100]
+
+    # identical sphere parameters across methods for a fair comparison
+    R = 0.5  # radius in domain units (match AC's value)
+    xx, yy, zz = _grid(S, L)
+    w = np.sqrt(2.0) * epsilon  # interface width
+    u0 = np.tanh((R - np.sqrt(xx**2 + yy**2 + zz**2)) / w).astype(np.float32)
+
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
+
+
+def create_initial_condition_star_pfc3d():
+    """Generates the star IC for the PFC3D problem (SMOOTH version to match MATLAB)."""
+    S = CFG.GRID_RESOLUTION
+    L = CFG.L_DOMAIN
+    epsilon = CFG.EPSILON_PARAM
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
+    selected_frames = [0, 20, 40, 60, 80, 100]
+
+    xx, yy, zz = _grid(S, L)
+
+    # Star shape parameters (EXACTLY as in MATLAB)
+    theta = np.arctan2(zz, xx)
+    R_theta = 5.0 + 1.0 * np.cos(6 * theta)
+    dist = np.sqrt(xx ** 2 + 2 * yy ** 2 + zz ** 2)
+
+    # SMOOTH initial condition (matches MATLAB stable version)
+    interface_width = np.sqrt(2) * epsilon
+    u0 = np.tanh((R_theta - dist) / interface_width).astype(np.float32)  # <-- SMOOTH!
+
+
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
+
+def create_initial_condition_star_mbe3d():
+    """Generates the star IC for the PFC3D problem (SMOOTH version to match MATLAB)."""
+    S = CFG.GRID_RESOLUTION
+    L = CFG.L_DOMAIN
+    epsilon = CFG.EPSILON_PARAM
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
+    selected_frames = [0, 20, 40, 60, 80, 100]
+
+    xx, yy, zz = _grid(S, L)
+
+    # Star shape parameters (EXACTLY as in MATLAB)
+    theta = np.arctan2(zz, xx)
+    R_theta = 5.0 + 1.0 * np.cos(6 * theta)
+    dist = np.sqrt(xx ** 2 + 2 * yy ** 2 + zz ** 2)
+
+    # SMOOTH initial condition (matches MATLAB stable version)
+    interface_width = np.sqrt(2) * epsilon
+    u0 = np.tanh((R_theta - dist) / interface_width).astype(np.float32)  # <-- SMOOTH!
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
+
+def create_initial_condition_torus_mbe3d():
+    """Generates the torus IC for the MBE3D problem (matches MATLAB exactly)."""
+    S = CFG.GRID_RESOLUTION
+    L = CFG.L_DOMAIN
+    epsilon = CFG.EPSILON_PARAM
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
+    selected_frames = [0, 20, 40, 60, 80, 100]
+    # Create grid (assuming you have this helper function)
+    xx, yy, zz = _grid(S, L)
+    # Torus parameters (EXACTLY as in MATLAB)
+    R = 2.1  # Major radius
+    r0 = 0.7  # Minor radius
+    interface_width = np.sqrt(2) * epsilon
+    # Calculate torus distance function
+    torus_dist = np.sqrt((np.sqrt(xx ** 2 + yy ** 2) - R) ** 2 + zz ** 2)
+    # Create initial condition using tanh profile
+    u0 = np.tanh((r0 - torus_dist) / interface_width).astype(np.float32)
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
+
+def create_initial_condition_sphere_mbe3d():
+    """Generates the sphere IC for the SH3D problem (identical profile to AC)."""
+    S = CFG.GRID_RESOLUTION
+    L = CFG.L_DOMAIN
+    epsilon = CFG.EPSILON_PARAM
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
+    selected_frames = [0, 20, 40, 60, 80, 100]
+
+    # identical sphere parameters across methods for a fair comparison
+    R = 1.5  # radius in domain units (match AC's value)
+    xx, yy, zz = _grid(S, L)
+    w = np.sqrt(16.0) * epsilon  # interface width
+    u0 = np.tanh((R - np.sqrt(xx**2 + yy**2 + zz**2)) / w).astype(np.float32)
+
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
+
+def create_initial_condition_sphere_pfc3d():
+    """
+    Generates the SPHERE IC for the PFC3D problem (unseen input for models).
+    Form: u0 = tanh((R - r) / (sqrt(2)*epsilon))  -- same as our MATLAB PFC sphere.
+    """
+    S = CFG.GRID_RESOLUTION
+    L = CFG.L_DOMAIN
+    epsilon = CFG.EPSILON_PARAM
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
+    selected_frames = [0, 20, 40, 60, 80, 100]
+
+    xx, yy, zz = _grid(S, L)
+    r = np.sqrt(xx**2 + yy**2 + zz**2)
+
+    # Radius choice to mirror the MATLAB PFC3D example on L=10*pi
+    # (if your config uses a different L, feel free to adjust R)
+    R = 6.0
+    interface_width = np.sqrt(2.0) * epsilon
+    u0 = np.tanh((R - r) / interface_width).astype(np.float32)
+
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
+
 
 # ----------------------------------------------------
-# 3) Model loading (match training hyperparameters)
+# 3) Model Loading
 # ----------------------------------------------------
-def load_model(kind: str, device: torch.device):
-    """
-    Select architecture by method:
-      - FNO4d backbone: 'FNO4d', 'PENCO-FNO'
-      - TNO3d backbone: 'MHNO', 'PENCO-MHNO', 'PurePhysics'
-    """
-    if kind in ("FNO4d", "PENCO-FNO"):
+def load_model(method: str, model_type: str, device: torch.device):
+    """Loads a model checkpoint based on its type (FNO4d or TNO3d)."""
+    if model_type == "FNO4d":
         model = FNO4d(
             modes1=CFG.MODES, modes2=CFG.MODES, modes3=CFG.MODES, modes4_internal=None,
             width=CFG.WIDTH, width_q=CFG.WIDTH_Q, T_in_channels=CFG.T_IN_CHANNELS,
             n_layers=CFG.N_LAYERS
         ).to(device)
-    else:
+    elif model_type == "TNO3d":
         model = TNO3d(
             modes1=CFG.MODES, modes2=CFG.MODES, modes3=CFG.MODES,
             width=CFG.WIDTH, width_q=CFG.WIDTH_Q, width_h=CFG.WIDTH_H,
             T_in=CFG.T_IN_CHANNELS, T_out=1, n_layers=CFG.N_LAYERS
         ).to(device)
+    else:
+        raise ValueError(f"Unknown model_type: {model_type}")
 
-    ckpt = torch.load(CKPTS[kind], map_location=device)
+    path = CKPTS[method][1]
+    ckpt = torch.load(path, map_location=device, weights_only=True)
+    # ---- strict cfg check ----
+    if "config" in ckpt:
+        cfg_ckpt = ckpt["config"]
+        def _eq(a, b, tol=1e-12): return abs(float(a) - float(b)) < tol
+        mismatches = []
+        if not _eq(cfg_ckpt.get("DT", CFG.DT), CFG.DT):
+            mismatches.append(f"DT (ckpt={cfg_ckpt.get('DT')}, run={CFG.DT})")
+        if int(cfg_ckpt.get("GRID_RESOLUTION", CFG.GRID_RESOLUTION)) != int(CFG.GRID_RESOLUTION):
+            mismatches.append(f"GRID_RESOLUTION (ckpt={cfg_ckpt.get('GRID_RESOLUTION')}, run={CFG.GRID_RESOLUTION})")
+        if int(cfg_ckpt.get("T_IN_CHANNELS", CFG.T_IN_CHANNELS)) != int(CFG.T_IN_CHANNELS):
+            mismatches.append(f"T_IN_CHANNELS (ckpt={cfg_ckpt.get('T_IN_CHANNELS')}, run={CFG.T_IN_CHANNELS})")
+        if mismatches:
+            raise RuntimeError("Checkpoint/runtime config mismatch: " + ", ".join(mismatches))
     model.load_state_dict(ckpt["state_dict"])
     model.eval()
     return model
+
+## CH3D
+import torch.fft as tfft
+
+def semi_implicit_step_ch3d(u, dt, dx, epsilon):
+    """
+    CH3D semi-implicit (matches MATLAB):
+        u^{n+1} = ifftn( (Û - dt*K2*F[u^3 - 3u]) / (1 + dt*(2*K2 + eps^2*K2^2)) )
+    u: (B,S,S,S,1), real
+    """
+    # squeeze channel
+    u = u[..., 0]  # (B,Sx,Sy,Sz)
+
+    B, Sx, Sy, Sz = u.shape
+    # Angular wavenumbers (rad/unit length). IMPORTANT: NO extra /L.
+    # np.fft.fftfreq(n, d=dx) gives cycles per unit; multiply by 2π to get rad/unit.
+    kx = 2 * np.pi * np.fft.fftfreq(Sx, d=dx)
+    ky = 2 * np.pi * np.fft.fftfreq(Sy, d=dx)
+    kz = 2 * np.pi * np.fft.fftfreq(Sz, d=dx)
+
+    # Build K^2 grid on the correct device/dtype
+    KX2 = torch.from_numpy(kx.astype(np.float32)**2).to(u.device)
+    KY2 = torch.from_numpy(ky.astype(np.float32)**2).to(u.device)
+    KZ2 = torch.from_numpy(kz.astype(np.float32)**2).to(u.device)
+    K2x, K2y, K2z = torch.meshgrid(KX2, KY2, KZ2, indexing="ij")
+    K2 = K2x + K2y + K2z
+    del K2x, K2y, K2z
+
+    U = tfft.fftn(u, dim=(-3, -2, -1))
+    nonlin = u**3 - 3.0 * u
+    NL = tfft.fftn(nonlin, dim=(-3, -2, -1))
+
+    numer = U - dt * K2 * NL
+    denom = 1.0 + dt * (2.0 * K2 + (epsilon**2) * (K2**2))
+
+    V = numer / denom
+    u_next = tfft.ifftn(V, dim=(-3, -2, -1)).real  # (B,Sx,Sy,Sz)
+    return u_next.unsqueeze(-1)                     # (B,Sx,Sy,Sz,1)
+
 
 # -----------------------------------------------------------
 # 4) Bootstrap T_in window with semi-implicit teacher
 # -----------------------------------------------------------
 @torch.no_grad()
 def bootstrap_states_from_u0(u0_np: np.ndarray, T_in: int, device: torch.device):
-    """
-    Returns:
-      states: list of T_in tensors [u^0, u^1, ..., u^{T_in-1}] each (1,S,S,S,1)
-      x0:     window tensor (1,S,S,S,T_in) built from states
-    """
-    u = torch.from_numpy(u0_np).to(device=device).unsqueeze(0).unsqueeze(-1)  # (1,S,S,S,1)
-    states = [u]  # u^0
+    u = torch.from_numpy(u0_np).to(device=device).unsqueeze(0).unsqueeze(-1)
+    states = [u]
     for _ in range(1, T_in):
-        u = semi_implicit_step(u, CFG.DT, CFG.DX, CFG.EPS2)
-        states.append(u)  # u^1 ... u^{T_in-1}
-    x0 = torch.cat(states, dim=-1)  # (1,S,S,S,T_in)
+        if CFG.PROBLEM == 'PFC3D':
+            u = semi_implicit_step_pfc(u, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)
+        elif CFG.PROBLEM == 'CH3D':
+            u = semi_implicit_step_ch3d(u, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)  # <<< use CH step
+        elif CFG.PROBLEM == 'MBE3D':  # <-- NEW
+            u = semi_implicit_step_mbe(u, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)  # <-- NEW
+        else:
+            u = semi_implicit_step(u, CFG.DT, CFG.DX, CFG.EPS2)  # AC/SH path as before
+        states.append(u)
+    x0 = torch.cat(states, dim=-1)
     return states, x0
 
+@torch.no_grad()
+def bootstrap_states_from_u0_pfc(u0_np: np.ndarray, T_in: int, device: torch.device):
+    """
+    Semi-implicit spectral step that matches the MATLAB PFC DNS and training generator:
+    v̂ = (Û/dt - K·F[u^3] + 2K^2·Û) / (1/dt + (1-ε)K + K^3),  u^{n+1}=ifftn(v̂)
+    """
+    # u: (1,S,S,S,1)
+    u = torch.from_numpy(u0_np).to(device=device).unsqueeze(0).unsqueeze(-1)
+    states = [u]
+    for _ in range(1, T_in):
+        u = semi_implicit_step_pfc(u, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)  # PFC step!
+        states.append(u)
+    x0 = torch.cat(states, dim=-1)
+    return states, x0
+
+
 # -----------------------------------------------------------
-# 5) Rollout autoregressively from the bootstrapped window
+# 5) Rollout autoregressively
 # -----------------------------------------------------------
 @torch.no_grad()
 def rollout_aligned(model, x0: torch.Tensor, teacher_states: list, Nt: int):
     """
-    Produces an aligned sequence U[0..Nt], where:
-      U[0..T_in-1]  = teacher_states (u^0 ... u^{T_in-1})
-      U[T_in..Nt]   = model predictions (autoregressive) continuing from window x0
-    Shapes:
-      - teacher_states: list of T_in tensors, each (1,S,S,S,1)
-      - x0: (1,S,S,S,T_in)
-      - returns: np.array of shape (Nt+1, S, S, S)
+    Minimal MBE rollout:
+      - mean-center the window (like other cases)
+      - raw model prediction
+      - if non-finite or huge -> fallback to semi_implicit_step_mbe
+      - light clamp
     """
-    device = x0.device
     T_in = x0.shape[-1]
-
-    # Start the stored sequence with the teacher frames (aligned with u0)
-    seq = [st.squeeze(0).squeeze(-1).detach().cpu().numpy() for st in teacher_states]  # length T_in
-
-    # Autoregressive predictions for the remaining steps
-    x = x0.clone()
+    seq = [st.squeeze(0).squeeze(-1).detach().cpu().numpy() for st in teacher_states]
+    x = x0.clone().to(torch.float32)
     steps_to_predict = Nt + 1 - T_in
+
     for _ in range(steps_to_predict):
-        y_pred = model(x)                       # (1,S,S,S,1)
-        seq.append(y_pred.squeeze(0).squeeze(-1).cpu().numpy())
-        x = torch.cat([x[..., 1:], y_pred], dim=-1)
+        u_in_last = x[..., -1:]  # (1,S,S,S,1)
 
-    return np.stack(seq, axis=0).astype(np.float32)  # (Nt+1,S,S,S)
+        # mean-center last frame (stable like other PDEs)
+        m_last = u_in_last.mean(dim=(1, 2, 3, 4), keepdim=True)
+        with torch.amp.autocast(device_type='cuda', enabled=False):
+            y_pred = model(x - m_last).to(torch.float32) + m_last
 
+        # if NaN/Inf or too large -> fallback to teacher
+        if (not torch.isfinite(y_pred).all()) or (y_pred.abs().max() > 5.0):
+            y_next = semi_implicit_step_mbe(u_in_last, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)
+        else:
+            y_next = y_pred
+
+        # light clamp to avoid cascading spikes
+        y_next = torch.clamp(y_next, -2.5, 2.5)
+
+        # paranoid guard
+        if not torch.isfinite(y_next).all():
+            y_next = semi_implicit_step_mbe(u_in_last, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)
+
+        # commit
+        seq.append(y_next.squeeze(0).squeeze(-1).cpu().numpy())
+        x = torch.cat([x[..., 1:], y_next], dim=-1)
+
+    return np.stack(seq, axis=0).astype(np.float32)
 # -----------------------------------------------------------
-# 6) High-quality 3D plotting (paper-ready)
+# 6) High-quality 3D plotting
 # -----------------------------------------------------------
-def plot_isosurface_grid(volumes_by_method, frames, out_png="ac3d_compare.png", out_pdf="ac3d_compare.pdf",
-                         upsample=2, pad_vox=2):
-    """
-    volumes_by_method: dict name -> array (Nt+1,S,S,S)
-    frames: list of time indices to visualize
-    - upsample: trilinear upsampling factor for smoother surfaces
-    - pad_vox: padding (in upsampled voxels) around the tight bbox
-    """
-    # Show all five methods, in this order:
-    method_order = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]
+def plot_isosurface_grid(volumes_by_method, method_order, frames, out_png, out_pdf, upsample=2, pad_vox=2):
     n_rows = len(method_order)
     n_cols = len(frames)
 
-    # big canvas; lots of dpi
-    fig_w = 4.8 * n_cols
-    fig_h = 4.2 * n_rows
-    fig = plt.figure(figsize=(fig_w, fig_h))
+    fig = plt.figure(figsize=(4.8 * n_cols, 4.2 * n_rows))
     plt.subplots_adjust(left=0.07, right=0.98, top=0.90, bottom=0.05, wspace=0.05, hspace=0.05)
 
-    # vivid, bright, no edges — give PENCO-FNO a warm orange
+    # Colors
     facecolor_map = {
-        "FNO4d":       (1.00, 0.10, 0.10, 1.0),  # bright red
-        "MHNO":        (0.95, 0.20, 0.20, 1.0),  # warm red
-        "PENCO-MHNO":  (0.10, 0.90, 0.10, 1.0),  # bright green
-        "PENCO-FNO":   (0.95, 0.50, 0.15, 1.0),  # warm orange
-        "PurePhysics": (0.05, 0.95, 0.05, 1.0),  # bright green
+        "FNO4d": (1.00, 0.10, 0.10, 1.0),
+        "MHNO": (0.95, 0.20, 0.20, 1.0),
+        "PENCO-MHNO": (0.10, 0.90, 0.10, 1.0),
+        "PENCO-FNO": (0.95, 0.50, 0.15, 1.0),
+        "PENCO": (0.10, 0.90, 0.10, 1.0),
+        "PurePhysics": (0.05, 0.95, 0.05, 1.0),
     }
 
-    # helper for per-panel zoom: compute bbox from vertices
     def _tighten_axes(ax, verts, pad=pad_vox):
         if verts.size == 0:
             return
-        mins = verts.min(axis=0)
-        maxs = verts.max(axis=0)
-        (z0, y0, x0) = mins
-        (z1, y1, x1) = maxs
-        ax.set_xlim(x0 - pad, x1 + pad)
-        ax.set_ylim(y0 - pad, y1 + pad)
-        ax.set_zlim(z0 - pad, z1 + pad)
+        mins, maxs = verts.min(axis=0), verts.max(axis=0)
+        ax.set_xlim(mins[2] - pad, maxs[2] + pad)
+        ax.set_ylim(mins[1] - pad, maxs[1] + pad)
+        ax.set_zlim(mins[0] - pad, maxs[0] + pad)
 
     plot_idx = 1
     for r, method in enumerate(method_order):
@@ -173,37 +521,28 @@ def plot_isosurface_grid(volumes_by_method, frames, out_png="ac3d_compare.png", 
             ax.set_facecolor('white')
             ax.grid(False)
 
-            vol = vols[t]                     # (X,Y,Z)
-            vol_zyx = np.transpose(vol, (2,1,0))  # (Z,Y,X) for marching_cubes
-
-            # upsample smoothly in (Z,Y,X) for a higher-res surface
-            if upsample and upsample > 1:
-                # order=1 trilinear; preserve sign nicely for level=0
+            vol_zyx = np.transpose(vols[t], (2, 1, 0))
+            if upsample > 1:
                 vol_zyx = nd_zoom(vol_zyx, zoom=upsample, order=1)
 
             try:
-                verts, faces, _, _ = marching_cubes(vol_zyx, level=0.0, step_size=1, allow_degenerate=False)
-                rgba = facecolor_map[method]
-                mesh = Poly3DCollection(verts[faces], alpha=rgba[3], linewidth=0.0, antialiased=True)
-                mesh.set_facecolor(rgba)
-                mesh.set_edgecolor('none')  # no mesh lines
+                verts, faces, _, _ = marching_cubes(vol_zyx, level=0.0)
+                rgba = facecolor_map.get(method, (0.5, 0.5, 0.5, 1.0))
+                mesh = Poly3DCollection(verts[faces], alpha=rgba[3], facecolor=rgba, edgecolor='none')
                 ax.add_collection3d(mesh)
                 _tighten_axes(ax, verts, pad=pad_vox)
             except Exception as e:
-                ax.text2D(0.05, 0.90, f"MC fail @ t={t}\n{e}", transform=ax.transAxes, color='k', fontsize=10)
+                ax.text2D(0.05, 0.90, f"MC fail @ t={t}\n{e}", transform=ax.transAxes)
 
-            # only put the delta-t column headers on the top row
             if r == 0:
                 ax.set_title(rf"${t}\,\Delta t$", fontsize=20, fontweight='bold', pad=8)
-
-            # clean axes for a minimal look
-            ax.set_xticks([]); ax.set_yticks([]); ax.set_zticks([])
-            ax.set_box_aspect((1,1,1))
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_zticks([])
+            ax.set_box_aspect((1, 1, 1))
             ax.view_init(elev=22, azim=-60)
 
-        # left-side vertical method labels (once per row)
-        y_center = 1.0 - (r + 0.5) / n_rows
-        fig.text(0.03, y_center, method, va='center', ha='center',
+        fig.text(0.03, 1.0 - (r + 0.5) / n_rows, method, va='center', ha='center',
                  rotation=90, fontsize=22, fontweight='bold')
 
     plt.savefig(out_png, dpi=400, facecolor='white')
@@ -212,68 +551,125 @@ def plot_isosurface_grid(volumes_by_method, frames, out_png="ac3d_compare.png", 
     print(f"Saved comparison figures to: {out_png} and {out_pdf}")
 
 # -----------------------------------------------------------
-# 7) Main: load, rollout, plot, save .mat
+# 7) Main execution block
 # -----------------------------------------------------------
 def main():
     device = CFG.DEVICE
 
-    # IC
-    u0_np, domain_lengths, grid_sizes, Nt, dt, selected_frames = create_initial_condition_sphere_ac3d()
+    # Get the correct IC function from its name and call it
+    ic_func = globals()[IC_FUNCTION]
+    u0_np, domain_lengths, grid_sizes, Nt, dt, selected_frames = ic_func()
+
     Sx, Sy, Sz = grid_sizes
-    assert (Sx, Sy, Sz) == (CFG.GRID_RESOLUTION, CFG.GRID_RESOLUTION, CFG.GRID_RESOLUTION), \
-        f"Grid mismatch: IC {grid_sizes} vs CFG.GRID_RESOLUTION={CFG.GRID_RESOLUTION}"
-    assert abs(dt - CFG.DT) < 1e-12, "Python saver dt != CFG.DT (time-step mismatch)"
-    # Also ensure DX and EPS2 match your MATLAB DNS choices.
+    assert (Sx, Sy, Sz) == (CFG.GRID_RESOLUTION,) * 3, \
+        f"Grid mismatch: IC {grid_sizes} vs CFG {CFG.GRID_RESOLUTION}"
+    assert abs(dt - CFG.DT) < 1e-12, "DT mismatch between IC and CFG"
 
-    # Build aligned teacher window
-    teacher_states, x0 = bootstrap_states_from_u0(u0_np, CFG.T_IN_CHANNELS, device=device)
+    # Build teacher window
+    if CFG.PROBLEM == 'PFC3D':
+        teacher_states, x0 = bootstrap_states_from_u0_pfc(u0_np, CFG.T_IN_CHANNELS, device=device)
 
-    # load models & rollout (aligned to u0)
-    # NOTE: now five methods including both PENCO variants
-    methods = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]
+    elif CFG.PROBLEM == 'MBE3D':
+        # Uses semi_implicit_step_mbe inside bootstrap_states_from_u0
+        teacher_states, x0 = bootstrap_states_from_u0(u0_np, CFG.T_IN_CHANNELS, device=device)
 
+        # --- optional: quick sanity check on the teacher rollout ---
+        with torch.no_grad():
+            u = teacher_states[-1]  # (1,S,S,S,1) tensor on correct device
+            mins, maxs = [], []
+            steps_left = CFG.TOTAL_TIME_STEPS + 1 - CFG.T_IN_CHANNELS
+            for _ in range(steps_left):
+                u = semi_implicit_step_mbe(u, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)
+                mins.append(float(u.min()))
+                maxs.append(float(u.max()))
+            print("MBE teacher min/max over rollout:", min(mins), max(maxs))
+
+    else:
+        teacher_states, x0 = bootstrap_states_from_u0(u0_np, CFG.T_IN_CHANNELS, device=device)
+
+
+
+    def _check_finite(vols, name):
+        vmin, vmax = np.nanmin(vols), np.nanmax(vols)
+        if not np.isfinite(vmin) or not np.isfinite(vmax) or vmax > 10 or vmin < -10:
+            print(f"[WARN] {name}: suspicious values: min={vmin:.3g}, max={vmax:.3g}")
+        return vols
+
+    # Load models & rollout for the selected problem
     volumes_by_method = {}
-    for method in methods:
+    for method in METHODS:
         print(f"Loading & rolling out: {method}")
-        model = load_model(method, device=device)
-        vols = rollout_aligned(model, x0, teacher_states, Nt=Nt)  # (Nt+1,S,S,S), U[0]=u0
+        model_type, _ = CKPTS[method]
+        model = load_model(method, model_type, device=device)
+        vols = rollout_aligned(model, x0, teacher_states, Nt=Nt)
+        vols = _check_finite(vols, method)  # add this
         volumes_by_method[method] = vols
+
         del model
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    # optional visualization
+    # Generate dynamic output filenames
+    base_filename = f"{CFG.PROBLEM.lower()}_{IC_TYPE}_methods_compare"
+    out_png = f"{base_filename}.png"
+    out_pdf = f"{base_filename}.pdf"
+
+    # Visualization
     plot_isosurface_grid(
-        volumes_by_method, selected_frames,
-        out_png="ac3d_sphere_methods_compare.png",
-        out_pdf="ac3d_sphere_methods_compare.pdf",
-        upsample=3,
-        pad_vox=3
+        volumes_by_method, METHODS, selected_frames,
+        out_png=out_png,
+        out_pdf=out_pdf,
+        upsample=3, pad_vox=3
     )
 
-    # save .mat — sequences start at u0 (index 0) and match MATLAB DNS frames
-    out = {
+    # --- Save .mat file ---
+    out_data = {
         'meta': {
-            'case': 'AC3D_sphere',
+            'case': f'{CFG.PROBLEM}_{IC_TYPE}',
             'grid_sizes': np.array(grid_sizes, dtype=np.int32),
             'domain_lengths': np.array(domain_lengths, dtype=np.float32),
             'dx': np.float32(CFG.DX),
             'dt': np.float32(dt),
             'Nt': np.int32(Nt),
-            'T_in_channels': np.int32(CFG.T_IN_CHANNELS),
             'selected_frames': np.array(selected_frames, dtype=np.int32),
         },
-        'FNO4d':        volumes_by_method['FNO4d'],         # (Nt+1,S,S,S)
-        'MHNO':         volumes_by_method['MHNO'],
-        'PENCO_MHNO':   volumes_by_method['PENCO-MHNO'],   # use underscore to be MATLAB-friendly
-        'PENCO_FNO':    volumes_by_method['PENCO-FNO'],
-        'PurePhysics':  volumes_by_method['PurePhysics'],
-        'teacher_window': np.stack([s.squeeze(0).squeeze(-1).cpu().numpy() for s in teacher_states], axis=0),
+        'teacher_window': np.stack([s.squeeze().cpu().numpy() for s in teacher_states], axis=0),
         'U0': u0_np,
     }
-    mat_name = "AC3D_sphere_eval_compare.mat"
-    savemat(mat_name, out, do_compression=True)
+    # Save each method (Matlab-friendly keys)
+    for method in METHODS:
+        matlab_friendly_name = method.replace('-', '_')  # e.g., PENCO-MHNO -> PENCO_MHNO
+        out_data[matlab_friendly_name] = volumes_by_method[method]
+
+    mat_name = f"{CFG.PROBLEM.lower()}_{IC_TYPE}_eval_compare.mat"
+    savemat(mat_name, out_data, do_compression=True)
     print(f"Saved MATLAB results to: {mat_name}")
 
 if __name__ == "__main__":
+    device = CFG.DEVICE
+
+    # Get the correct IC function from its name and call it
+    ic_func = globals()[IC_FUNCTION]
+    u0_np, domain_lengths, grid_sizes, Nt, dt, selected_frames = ic_func()
+
+    # ==================== DIAGNOSTIC CODE ====================
+    print(f"Python IC diagnostics:")
+    print(f"  u0 range: [{u0_np.min():.3f}, {u0_np.max():.3f}]")
+    print(f"  u0 mean: {u0_np.mean():.3f}")
+    print(f"  Grid: {grid_sizes}, Domain: {domain_lengths}")
+    print(f"  epsilon: {CFG.EPSILON_PARAM}, dt: {dt}")
+    print(f"  L_DOMAIN: {CFG.L_DOMAIN}")
+    # =========================================================
+
+    Sx, Sy, Sz = grid_sizes
+    assert (Sx, Sy, Sz) == (CFG.GRID_RESOLUTION,) * 3, \
+        f"Grid mismatch: IC {grid_sizes} vs CFG {CFG.GRID_RESOLUTION}"
+    assert abs(dt - CFG.DT) < 1e-12, "DT mismatch between IC and CFG"
+
+    # Build teacher window
+    if CFG.PROBLEM == 'PFC3D':
+        teacher_states, x0 = bootstrap_states_from_u0_pfc(u0_np, CFG.T_IN_CHANNELS, device=device)
+    else:
+        teacher_states, x0 = bootstrap_states_from_u0(u0_np, CFG.T_IN_CHANNELS, device=device)
+
     main()
