@@ -4,7 +4,7 @@
 #   • Step-based training (per-batch LR stepping)
 #   • Hybrid budget scales with actual N_TRAIN (uses N_TRAIN_ACTUAL set by utilities)
 #   • MBE physics loss matches utilities.train_fno_hybrid MBE branch
-#   • Logging + .mat/model saving
+#   • Logging + .mat/model saving (SH/PFC-style)
 
 import os, time, random, math
 from pathlib import Path
@@ -14,6 +14,7 @@ import torch.nn.functional as F
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from scipy.io import savemat
+from config import seed_everything
 
 import config as CFG
 from networks import FNO4d, TNO3d
@@ -155,8 +156,8 @@ def _collect_frames_and_volumes(model, mat_path, test_id, frames, T_in, Nt, down
     )
 
 # --------------------
-# TRAIN LOOP: matches utilities.train_fno_hybrid MBE path, but adds
-# step-based training + logging.
+# TRAIN LOOP: matches utilities.train_fno_hybrid MBE path,
+# with step-based training + logging.
 # --------------------
 def train_fno_hybrid_LOGGING_STEPBASED(model, train_loader, test_loader, optimizer, scheduler, device, pde_weight=None):
     pde_weight = CFG.PDE_WEIGHT if pde_weight is None else pde_weight
@@ -171,7 +172,7 @@ def train_fno_hybrid_LOGGING_STEPBASED(model, train_loader, test_loader, optimiz
     from itertools import cycle
     from timeit import default_timer
 
-    # --- use the same effective steps/epoch convention as main.py/utilities ---  # <<< CHANGED
+    # Same effective steps/epoch convention as main + utilities
     steps_per_epoch = int(getattr(CFG, "STEPS_PER_EPOCH_EFF",
                                   getattr(CFG, "STEPS_PER_EPOCH", 20)))
     train_iter = cycle(train_loader)
@@ -185,7 +186,10 @@ def train_fno_hybrid_LOGGING_STEPBASED(model, train_loader, test_loader, optimiz
         energy_loss_acc = scheme_loss_acc = 0.0
         n_batches = 0
 
-        epoch_frac = ep / max(1, (CFG.EPOCHS - 1))  # ramps
+        # gentle ramps (same as utilities MBE branch)
+        epoch_frac = ep / max(1, (CFG.EPOCHS - 1))  # 0..1
+        w_scheme = 0.32 - 0.12 * epoch_frac
+        w_lowk   = 0.25 + 0.60 * (epoch_frac ** 2)
 
         for _ in range(steps_per_epoch):
             x, y = next(train_iter)
@@ -194,44 +198,35 @@ def train_fno_hybrid_LOGGING_STEPBASED(model, train_loader, test_loader, optimiz
             u_in_last = x[..., -1:]  # (B,S,S,S,1)
 
             optimizer.zero_grad(set_to_none=True)
-            y_hat = model(x)
+            y_pred = model(x)
+            y_hat = y_pred  # (no mass projection in working MBE path)
 
-            # data term (same scaling pattern)
-            loss_data = (1.0 if pde_weight == 0 else 1e3) * F.mse_loss(y_hat, y)
+            # ---- data term (matches utilities MBE branch) ----
+            if pde_weight == 0 or pde_weight == 1:
+                loss_data = F.mse_loss(y_hat, y)
+            else:
+                loss_data = 1e2 * F.mse_loss(y_hat, y)
 
             # --------- MBE physics bundle (matches utilities) ----------
-            # gentle ramps
-            w_scheme = 0.32 - 0.12 * epoch_frac
-            w_lowk   = 0.25 + 0.60 * (epoch_frac ** 2)
-
-            # residuals
-            l_fft = scheme_residual_fourier(u_in_last, y_hat)
             tau_off = 1.0 / (2.0 * math.sqrt(5.0))
             l_tau1 = physics_collocation_tau_L2_MBE(u_in_last, y_hat, tau=(0.5 - tau_off))
             l_tau2 = physics_collocation_tau_L2_MBE(u_in_last, y_hat, tau=(0.5 + tau_off))
-            #l_tau_mid = physics_collocation_tau_L2_MBE(u_in_last, y_hat, tau=0.5)
-            #l_mid_norm = 0.25 * (l_tau1 + l_tau2) + 0.50 * l_tau_mid
             l_mid_norm = 0.5 * (l_tau1 + l_tau2)
+
             # teacher consistency (+ one more gentle step)
             u_si1 = semi_implicit_step_mbe(u_in_last, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)
             loss_scheme1 = F.mse_loss(y_hat, u_si1)
-            with torch.no_grad():
-                u_si2 = semi_implicit_step_mbe(u_si1, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)
-            x2 = torch.cat([x[..., 1:], y_hat], dim=-1)
-            y_hat2 = model(x2)
-            #y_hat2 = physics_guided_update_mbe_optimal(y_hat, y_hat2, alpha_cap=0.6, low_k_snap_frac=0.45)
-            loss_scheme2 = F.mse_loss(y_hat2, u_si2)
-            loss_scheme = w_scheme * (0.6 * loss_scheme1 + 0.4 * loss_scheme2)
+            loss_scheme = w_scheme * (loss_scheme1)
 
             # spectral low-k anchor
             l_lowk = low_k_mse(y_hat, u_si1, frac=0.50)
 
             # physics mix (scale identical to utilities)
-            loss_phys = 6e-3 * (1.0 * l_fft + l_mid_norm + w_lowk * 0.40 * l_lowk)
+            loss_phys = 1e-3 * (l_mid_norm + w_lowk * l_lowk)
 
-            # energy hinge + tiny mass regularizer
-            loss_energy = 0.03 * energy_penalty_mbe(u_in_last, y_hat, CFG.DX, CFG.EPSILON_PARAM)
-            #loss_phys = loss_phys + 0.01 * mass_penalty(u_in_last, y_hat)
+            # energy hinge + tiny mass regularizer (mass penalty off in working path)
+            loss_energy = 0.3 * energy_penalty_mbe(u_in_last, y_hat, CFG.DX, CFG.EPSILON_PARAM)
+            # loss_phys = loss_phys + 0.01 * mass_penalty(u_in_last, y_hat)
 
             # total loss
             loss_total = (1.0 - pde_weight) * loss_data + pde_weight * (loss_phys + loss_scheme + loss_energy)
@@ -295,8 +290,10 @@ def main():
 
     print("Using device:", CFG.DEVICE)
     print("TIME_FRAMES:", TIME_FRAMES)
+    print("Problem is: ", CFG.PROBLEM)
 
-    set_seeds(CFG.SEED)
+    # global seed once
+    seed_everything(CFG.SEED)
 
     scenarios = []
 
@@ -309,37 +306,35 @@ def main():
             for pw in DEFAULT_PDE_WEIGHTS:
                 CFG.PDE_WEIGHT = float(pw)
 
-                # --- Build loaders AFTER setting PDE_WEIGHT so PURE_PHYSICS_USE_ALL can apply ---
+                # --- Reseed so each scenario starts from the SAME RNG state ---
+                seed_everything(CFG.SEED)
 
-
-
-                # --- Build loaders AFTER setting PDE_WEIGHT so PURE_PHYSICS_USE_ALL can apply ---
-                set_seeds(CFG.SEED)  # <<< NEW: make each scenario start from the same RNG state
+                # Build loaders AFTER setting PDE_WEIGHT so PURE_PHYSICS_USE_ALL can apply
                 train_loader, test_loader, test_ids, _ = build_loaders()
 
                 # ============ Step-based scaling (identical to your working main.py) ============
-                base_steps = int(getattr(CFG, "STEPS_PER_EPOCH", 20))                    # <<< CHANGED
+                base_steps = int(getattr(CFG, "STEPS_PER_EPOCH", 20))
                 # Only scale with N_TRAIN when hybrid/data; keep constant when pure physics
-                if (CFG.PDE_WEIGHT < 1.0) and getattr(CFG, "SCALE_STEPS_WITH_NTRAIN", False):   # <<< CHANGED
-                    N_ref = max(1, int(getattr(CFG, "N_TRAIN_REF", 50)))                        # <<< CHANGED
-                    N_cur = max(1, int(getattr(CFG, "N_TRAIN_ACTUAL",                           # <<< CHANGED
+                if (CFG.PDE_WEIGHT < 1.0) and getattr(CFG, "SCALE_STEPS_WITH_NTRAIN", False):
+                    N_ref = max(1, int(getattr(CFG, "N_TRAIN_REF", 50)))
+                    N_cur = max(1, int(getattr(CFG, "N_TRAIN_ACTUAL",
                                                getattr(CFG, "N_TRAIN", N_ref))))
-                    STEPS_PER_EPOCH_EFF = max(1, int(round(base_steps * N_cur / N_ref)))        # <<< CHANGED
+                    STEPS_PER_EPOCH_EFF = max(1, int(round(base_steps * N_cur / N_ref)))
                 else:
-                    STEPS_PER_EPOCH_EFF = base_steps                                           # <<< CHANGED
+                    STEPS_PER_EPOCH_EFF = base_steps
 
-                setattr(CFG, "STEPS_PER_EPOCH_EFF", STEPS_PER_EPOCH_EFF)                        # <<< CHANGED
-                #total_steps = CFG.EPOCHS * STEPS_PER_EPOCH_EFF                                   # <<< CHANGED
-                total_steps = CFG.N_TRAIN_REF * STEPS_PER_EPOCH_EFF
+                setattr(CFG, "STEPS_PER_EPOCH_EFF", STEPS_PER_EPOCH_EFF)
+                total_steps = CFG.EPOCHS * STEPS_PER_EPOCH_EFF
                 print(f"[Budget] N_TRAIN={CFG.N_TRAIN} (actual={getattr(CFG,'N_TRAIN_ACTUAL',CFG.N_TRAIN)}), "
-                      f"steps/epoch={STEPS_PER_EPOCH_EFF}, total={total_steps}")                 # <<< CHANGED
+                      f"steps/epoch={STEPS_PER_EPOCH_EFF}, total={total_steps}")
                 # ==============================================================================
 
-                rep_test_id = int(test_ids[4]) # 0
+                # which test id to use for frame visualizations
+                rep_test_id = int(test_ids[4])  # keep as in your previous script
 
                 model = _init_model(model_name)
                 optimizer = Adam(model.parameters(), lr=CFG.LEARNING_RATE, weight_decay=CFG.WEIGHT_DECAY)
-                scheduler = CosineAnnealingLR(optimizer, T_max=total_steps)  # per-batch schedule  # <<< CHANGED
+                scheduler = CosineAnnealingLR(optimizer, T_max=total_steps)  # per-batch schedule
 
                 logs = train_fno_hybrid_LOGGING_STEPBASED(
                     model, train_loader, test_loader, optimizer, scheduler, CFG.DEVICE, pde_weight=CFG.PDE_WEIGHT
@@ -432,10 +427,10 @@ def main():
             'MODELS': np.array(DEFAULT_MODELS, dtype=object),
             'N_TRAINS': _asF32F(np.array(DEFAULT_N_TRAINS, dtype=np.int32)),
             'VOLUME_DOWNSAMPLE': int(VOLUME_DOWNSAMPLE),
-            'STEPS_PER_EPOCH': int(getattr(CFG, "STEPS_PER_EPOCH", 500)),
+            'STEPS_PER_EPOCH': int(getattr(CFG, "STEPS_PER_EPOCH", 20)),
             'N_TEST_FIXED': int(getattr(CFG, "N_TEST_FIXED", 40)),
-            'SCALE_STEPS_WITH_NTRAIN': bool(getattr(CFG, "SCALE_STEPS_WITH_NTRAIN", False)),   # <<< CHANGED
-            'N_TRAIN_REF': int(getattr(CFG, "N_TRAIN_REF", 50)),                                # <<< CHANGED
+            'SCALE_STEPS_WITH_NTRAIN': bool(getattr(CFG, "SCALE_STEPS_WITH_NTRAIN", False)),
+            'N_TRAIN_REF': int(getattr(CFG, "N_TRAIN_REF", 50)),
         },
         'scenarios': np.array(scenarios, dtype=object)
     }
