@@ -14,6 +14,7 @@ import torch.nn.functional as F
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from scipy.io import savemat
+from config import seed_everything
 
 import config as CFG
 from networks import FNO4d, TNO3d
@@ -204,14 +205,14 @@ def train_fno_hybrid_LOGGING_STEPBASED(model, train_loader, test_loader, optimiz
             y_hat = model(x)
 
             # data term (SH path uses same scaling style)
-            loss_data = (1.0 if pde_weight == 0 else 1e3) * F.mse_loss(y_hat, y)
+            loss_data = (1.0 if pde_weight == 0 or pde_weight == 1 else 1e3) * F.mse_loss(y_hat, y)
 
             # ----- SH physics bundle (matches utilities SH branch) -----
             w_scheme = 0.32 - 0.12 * epoch_frac
             w_lowk   = 0.25 + 0.60 * (epoch_frac ** 2)
 
             # residuals
-            l_fft = scheme_residual_fourier(u_in_last, y_hat)
+            #l_fft = scheme_residual_fourier(u_in_last, y_hat)
             tau_off = 1.0 / (2.0 * math.sqrt(5.0))
             l_tau1 = physics_collocation_tau_L2_SH(u_in_last, y_hat, tau=(0.5 - tau_off))
             l_tau2 = physics_collocation_tau_L2_SH(u_in_last, y_hat, tau=(0.5 + tau_off))
@@ -220,21 +221,21 @@ def train_fno_hybrid_LOGGING_STEPBASED(model, train_loader, test_loader, optimiz
             # teacher + gentle second step
             u_si1 = semi_implicit_step_sh(u_in_last, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)
             loss_scheme1 = F.mse_loss(y_hat, u_si1)
-            with torch.no_grad():
-                u_si2 = semi_implicit_step_sh(u_si1, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)
-            x2 = torch.cat([x[..., 1:], y_hat], dim=-1)
-            y_hat2 = model(x2)
-            loss_scheme2 = F.mse_loss(y_hat2, u_si2)
-            loss_scheme = w_scheme * (0.6 * loss_scheme1 + 0.4 * loss_scheme2)
+            #with torch.no_grad():
+            #    u_si2 = semi_implicit_step_sh(u_si1, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)
+            #x2 = torch.cat([x[..., 1:], y_hat], dim=-1)
+            #y_hat2 = model(x2)
+            #loss_scheme2 = F.mse_loss(y_hat2, u_si2)
+            loss_scheme = w_scheme * ( loss_scheme1 )
 
             # low-k anchor
             l_lowk = low_k_mse(y_hat, u_si1, frac=0.45)
 
             # physics mix (scale identical to utilities)
-            loss_phys = 6e-3 * (1.0 * l_fft + 0.7 * l_mid_norm + w_lowk * 0.40 * l_lowk)
+            loss_phys = 1e-3 * (l_mid_norm + w_lowk * l_lowk)
 
             # SH free-energy hinge
-            loss_energy = 0.03 * energy_penalty_sh(u_in_last, y_hat, CFG.DX, CFG.EPSILON_PARAM)
+            loss_energy = 0.3 * energy_penalty_sh(u_in_last, y_hat, CFG.DX, CFG.EPSILON_PARAM)
 
             # total
             loss_total = (1.0 - pde_weight) * loss_data + pde_weight * (loss_phys + loss_scheme + loss_energy)
@@ -269,7 +270,7 @@ def train_fno_hybrid_LOGGING_STEPBASED(model, train_loader, test_loader, optimiz
         lr = optimizer.param_groups[0]['lr']
 
         # epoch print
-        if ep % 15 == 0:
+        if ep % 25 == 0:
             print(f"{ep:5d} | {t2-t1:7.3f} | "
                   f"{data_loss_acc/n_batches:8.3e} | {phys_loss_acc/n_batches:8.3e} | {total_loss_acc/n_batches:9.3e} | "
                   f"{test_rel:10.3e} |  {energy_loss_acc/n_batches:10.3e} |  {scheme_loss_acc/n_batches:10.3e} | {l_mid_norm_acc:10.3e} | {lr: .2e}")
@@ -301,8 +302,10 @@ def main():
 
     print("Using device:", CFG.DEVICE)
     print("TIME_FRAMES:", TIME_FRAMES)
+    print("Problem is: ", CFG.PROBLEM)
 
-    set_seeds(CFG.SEED)
+    #set_seeds(CFG.SEED)
+    seed_everything(CFG.SEED)
 
     scenarios = []
 
@@ -316,7 +319,8 @@ def main():
                 CFG.PDE_WEIGHT = float(pw)
 
                 # --- Reseed so each scenario starts from the same RNG state ---
-                set_seeds(CFG.SEED)
+                #set_seeds(CFG.SEED)
+                seed_everything(CFG.SEED)
 
                 # Build loaders AFTER setting PDE_WEIGHT (PURE_PHYSICS_USE_ALL may apply)
                 train_loader, test_loader, test_ids, _ = build_loaders()
@@ -332,8 +336,8 @@ def main():
                     STEPS_PER_EPOCH_EFF = base_steps
 
                 setattr(CFG, "STEPS_PER_EPOCH_EFF", STEPS_PER_EPOCH_EFF)
-                #total_steps = CFG.EPOCHS * STEPS_PER_EPOCH_EFF
-                total_steps = CFG.N_TRAIN_REF * STEPS_PER_EPOCH_EFF
+                total_steps = CFG.EPOCHS * STEPS_PER_EPOCH_EFF
+                #total_steps = CFG.N_TRAIN_REF * STEPS_PER_EPOCH_EFF
                 print(f"[Budget] N_TRAIN={CFG.N_TRAIN} (actual={getattr(CFG,'N_TRAIN_ACTUAL',CFG.N_TRAIN)}), "
                       f"steps/epoch={STEPS_PER_EPOCH_EFF}, total={total_steps}")
                 # ===================================================================

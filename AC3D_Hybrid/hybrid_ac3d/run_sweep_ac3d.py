@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from scipy.io import savemat
+from config import seed_everything
 
 import config as CFG
 from networks import FNO4d, TNO3d
@@ -197,46 +198,45 @@ def train_fno_hybrid_LOGGING_STEPBASED(model, train_loader, test_loader, optimiz
 
             # forward
             y_pred = model(x)
-            y_hat = y_pred
 
             # data term (same scaling style as utilities)
-            loss_data = (1.0 if pde_weight == 0 else 1e3) * F.mse_loss(y_pred, y)
+            #loss_data =  CFG.alpha * F.mse_loss(y_pred, y)
+            loss_data = (1.0 if pde_weight == 0 else 1e2) * F.mse_loss(y_pred, y)
 
-            # ----- AC physics bundle (IDENTICAL to utilities AC branch) -----
             # gentle ramps (same spirit as SH/PFC/MBE)
             epoch_frac = ep / max(1, (CFG.EPOCHS - 1))
             w_scheme = 0.32 - 0.12 * epoch_frac
-            w_lowk   = 0.25 + 0.60 * (epoch_frac ** 2)
+            w_lowk = 0.25 + 0.60 * (epoch_frac ** 2)
 
-            # (1) Fourier preconditioned residual (AC explicit teacher residual path)
-            l_fft = scheme_residual_fourier(u_in_last, y_hat)
+            # residuals
+            l_fft = scheme_residual_fourier(u_in_last, y_pred)  # AC path uses its (explicit) residual
 
-            # (2) L2 Gauss–Lobatto collocation (two interior nodes)
+            # Gauss–Lobatto L2 collocation (identical form to others)
             tau_off = 1.0 / (2.0 * math.sqrt(5.0))
-            l_tau1 = physics_collocation_tau_L2_AC(u_in_last, y_hat, tau=(0.5 - tau_off))
-            l_tau2 = physics_collocation_tau_L2_AC(u_in_last, y_hat, tau=(0.5 + tau_off))
+            l_tau1 = physics_collocation_tau_L2_AC(u_in_last, y_pred, tau=(0.5 - tau_off))
+            l_tau2 = physics_collocation_tau_L2_AC(u_in_last, y_pred, tau=(0.5 + tau_off))
             l_mid_norm = 0.5 * (l_tau1 + l_tau2)
 
-            # (3) teacher consistency (AC semi-implicit), with PGU on step-2
-            u_si1 = semi_implicit_step(u_in_last, CFG.DT, CFG.DX, CFG.EPS2)   # AC branch inside
-            loss_scheme1 = F.mse_loss(y_hat, u_si1)
-            with torch.no_grad():
-                u_si2 = semi_implicit_step(u_si1, CFG.DT, CFG.DX, CFG.EPS2)
+            # teacher consistency (AC semi-implicit); PGU on second step
+            u_si1 = semi_implicit_step(u_in_last, CFG.DT, CFG.DX, CFG.EPS2)
+            loss_scheme1 = F.mse_loss(y_pred, u_si1)
 
-            x2 = torch.cat([x[..., 1:], y_hat], dim=-1)
-            y_hat2 = model(x2)
-            y_hat2 = physics_guided_update_ac_optimal(
-                x2[..., -1:], y_hat2, alpha_cap=0.6, low_k_snap_frac=0.45
-            )
-            loss_scheme2 = F.mse_loss(y_hat2, u_si2)
-            loss_scheme = w_scheme * (0.6 * loss_scheme1 + 0.4 * loss_scheme2)
+            #with torch.no_grad():
+            #    u_si2 = semi_implicit_step(u_si1, CFG.DT, CFG.DX, CFG.EPS2)
 
-            # (4) spectral low-k anchor
-            l_lowk = low_k_mse(y_hat, u_si1, frac=0.45)
+            #x2 = torch.cat([x[..., 1:], y_pred], dim=-1)
+            #y_hat2 = model(x2)
+            #y_hat2 = physics_guided_update_ac_optimal(x2[..., -1:], y_hat2, alpha_cap=0.6, low_k_snap_frac=0.45)
+            #loss_scheme2 = F.mse_loss(y_hat2, u_si2)
+            #loss_scheme = w_scheme * (0.6 * loss_scheme1 + 0.4 * loss_scheme2)
+            loss_scheme = w_scheme * (0.6 * loss_scheme1 )
+            # low-k anchor (stabilize coarse scales)
+            l_lowk = low_k_mse(y_pred, u_si1, frac=0.45)
 
-            # (5) physics mix + energy hinge (AC/CH)
-            loss_phys   = 6e-3 * (1.0 * l_fft + 0.7 * l_mid_norm + w_lowk * 0.40 * l_lowk)
-            loss_energy = 0.03 * energy_penalty(u_in_last, y_hat, CFG.DX, CFG.EPS2)
+            # physics mix and energy (mirror SH/PFC style)
+            #loss_phys = 6e-3 * (1.0 * l_fft + 0.7 * l_mid_norm + w_lowk * 0.40 * l_lowk)
+            loss_phys = 1e-3 * ( 0.7 * l_mid_norm + w_lowk * 0.40 * l_lowk)
+            loss_energy = 0.03 * energy_penalty(u_in_last, y_pred, CFG.DX, CFG.EPS2)
 
             # total
             loss_total = (1.0 - pde_weight) * loss_data + pde_weight * (loss_phys + loss_scheme + loss_energy)
@@ -303,8 +303,10 @@ def main():
 
     print("Using device:", CFG.DEVICE)
     print("TIME_FRAMES:", TIME_FRAMES)
+    print("Problem is: ", CFG.PROBLEM)
 
-    set_seeds(CFG.SEED)
+    #set_seeds(CFG.SEED)
+    seed_everything(CFG.SEED)
 
     scenarios = []
 
@@ -318,7 +320,8 @@ def main():
                 CFG.PDE_WEIGHT = float(pw)
 
                 # --- Reseed so each scenario starts from the same RNG state ---
-                set_seeds(CFG.SEED)
+                #set_seeds(CFG.SEED)
+                seed_everything(CFG.SEED)
 
                 # Build loaders AFTER setting PDE_WEIGHT (PURE_PHYSICS_USE_ALL may apply)
                 train_loader, test_loader, test_ids, _ = build_loaders()

@@ -10,7 +10,8 @@ from scipy.ndimage import zoom as nd_zoom
 # --- repo imports (your files) ---
 import config as CFG
 from networks import FNO4d, TNO3d
-from functions import semi_implicit_step, semi_implicit_step_pfc, semi_implicit_step_mbe
+from functions import semi_implicit_step, semi_implicit_step_pfc, semi_implicit_step_mbe, semi_implicit_step_sh, mass_project_pred, physics_guided_update_pfc_optimal
+import time  # NEW: for timing
 
 # -------------------------------------------------------------------
 # 1) PROBLEM-SPECIFIC CONFIGURATIONS
@@ -26,9 +27,9 @@ CKPTS_AC3D = {
     "MHNO": ("TNO3d",
              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/AC3d_models/TNO3d_MHNO_N200_pw0.00_E50.pt"),
     "PENCO-MHNO": ("TNO3d",
-                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/AC3d_models/TNO3d_PENCO_N200_pw0.25_E50.pt"),
+                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/AC3d_models/TNO3d_PENCO_N200_pw0.50_E50.pt"),
     "PENCO-FNO": ("FNO4d",
-                  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/AC3d_models/FNO4d_PENCO_N200_pw0.25_E50.pt"),
+                  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/AC3d_models/FNO4d_PENCO_N200_pw0.50_E50.pt"),
     "PurePhysics": ("TNO3d",
                     "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/AC3d_models/TNO3d_PurePhysics_N200_pw1.00_E50.pt"),
 }
@@ -46,7 +47,7 @@ CKPTS_CH3D = {
     "PENCO-FNO": ("FNO4d",
                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/FNO4d_PENCO_N200_pw0.25_E50.pt"),
     "PurePhysics": ("TNO3d",
-                    "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/FNO4d_PurePhysics_N200_pw1.00_E200.pt"),
+                    "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/CH3d_models/TNO3d_PurePhysics_N200_pw1.00_E50.pt"),
 }
 
 
@@ -54,30 +55,30 @@ CKPTS_CH3D = {
 CKPTS_SH3D = {
     # method_label: (model_type, path)
     "FNO4d": ("FNO4d",
-              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/FNO4d_FNO4d_N50_pw0.00_E50.pt"),
+              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/FNO4d_FNO4d_N200_pw0.00_E150.pt"),
     "MHNO": ("TNO3d",
-             "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/TNO3d_MHNO_N200_pw0.00_E50.pt"),
+             "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/TNO3d_MHNO_N200_pw0.00_E150.pt"),
     # NEW: split PENCO into two variants for CH3D (as in AC3D)
     "PENCO-MHNO": ("TNO3d",
-                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/TNO3d_PENCO_N200_pw0.75_E50.pt"),
+                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/TNO3d_PENCO_N200_pw0.25_E150.pt"),
     "PENCO-FNO": ("FNO4d",
-                  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/FNO4d_PENCO_N200_pw0.75_E50.pt"),
+                  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/FNO4d_PENCO_N200_pw0.25_E150.pt"),
     "PurePhysics": ("TNO3d",
-                    "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/TNO3d_PurePhysics_N200_pw1.00_E50.pt"),
+                    "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/SH3d_models/TNO3d_PurePhysics_N200_pw1.00_E150.pt"),
 }
 
 # --- Checkpoints for PFC3D ---
 CKPTS_PFC3D = {
     # method_label: (model_type, path)
     "FNO4d": ("FNO4d",
-              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/PFC3d_models/FNO4d_FNO4d_N50_pw0.00_E50.pt"),
+              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/PFC3d_models/FNO4d_FNO4d_N200_pw0.00_E50.pt"),
     "MHNO": ("TNO3d",
              "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/PFC3d_models/TNO3d_MHNO_N200_pw0.00_E50.pt"),
     # NEW: split PENCO into two variants for CH3D (as in AC3D)
     "PENCO-MHNO": ("TNO3d",
-                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/PFC3d_models/TNO3d_PENCO_N200_pw0.75_E50.pt"),
+                   "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/PFC3d_models/TNO3d_PENCO_N200_pw0.25_E50.pt"),
     "PENCO-FNO": ("FNO4d",
-                  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/PFC3d_models/FNO4d_PENCO_N200_pw0.75_E50.pt"),
+                  "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/PFC3d_models/FNO4d_PENCO_N200_pw0.25_E50.pt"),
     "PurePhysics": ("TNO3d",
                     "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/hybrid_ac3d/PFC3d_models/TNO3d_PurePhysics_N200_pw1.00_E50.pt"),
 }
@@ -103,13 +104,15 @@ if CFG.PROBLEM == 'AC3D':
     METHODS = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]
     IC_FUNCTION = 'create_initial_condition_sphere_ac3d'
     IC_TYPE = 'sphere'
+
 elif CFG.PROBLEM == 'CH3D':
     CKPTS = CKPTS_CH3D
-    METHODS = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]  # <- now 5 like AC3D
-    #IC_FUNCTION = 'create_initial_condition_star_ch3d'
+    METHODS = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]
     IC_FUNCTION = 'create_initial_condition_sphere_ch3d'
-    #IC_TYPE = 'star'
-    IC_TYPE = 'sphere'
+    #IC_FUNCTION = 'create_initial_condition_star_ch3d'
+    #IC_FUNCTION = 'create_initial_condition_spinodal_ch3d'
+    IC_TYPE = 'sphere' # sphere, star
+
 elif CFG.PROBLEM == 'SH3D':
     CKPTS = CKPTS_SH3D
     METHODS = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]
@@ -119,13 +122,14 @@ elif CFG.PROBLEM == 'PFC3D':
     CKPTS = CKPTS_PFC3D
     METHODS = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]  # <- now 5 like AC3D
     IC_FUNCTION = 'create_initial_condition_star_pfc3d'
+    #IC_FUNCTION ='create_initial_condition_sphere_pfc3d'
     IC_TYPE = 'star'
 elif CFG.PROBLEM == 'MBE3D':
     CKPTS = CKPTS_MBE3D
     METHODS = ["FNO4d", "MHNO", "PENCO-MHNO", "PENCO-FNO", "PurePhysics"]
-    #IC_FUNCTION = 'create_initial_condition_torus_mbe3d'
-    IC_FUNCTION ='create_initial_condition_sphere_mbe3d'
-    IC_TYPE = 'sphere' # torus   sphere
+    IC_FUNCTION = 'create_initial_condition_torus_mbe3d'
+    #IC_FUNCTION ='create_initial_condition_sphere_mbe3d'
+    IC_TYPE = 'torus' # torus   sphere
 else:
     raise ValueError(f"Problem '{CFG.PROBLEM}' not configured in this script.")
 
@@ -148,7 +152,7 @@ def create_initial_condition_sphere_ac3d():
     Nt = CFG.TOTAL_TIME_STEPS
     selected_frames = [0, 20, 40, 60, 80, 100]
 
-    radius = 0.5
+    radius = 0.5 # 0.5
     xx, yy, zz = _grid(S, L)
     interface_width = np.sqrt(2.0) * epsilon
     u0 = np.tanh((radius - np.sqrt(xx ** 2 + yy ** 2 + zz ** 2)) / interface_width).astype(np.float32)
@@ -164,42 +168,137 @@ def create_initial_condition_sphere_ch3d():
     Nt = CFG.TOTAL_TIME_STEPS
     selected_frames = [0, 20, 40, 60, 80, 100]
 
-    radius = 0.5
+    radius = 0.5 # 0.5
     xx, yy, zz = _grid(S, L)
-    interface_width = np.sqrt(16.0) * epsilon
+    interface_width = np.sqrt(2.0) * epsilon
     u0 = np.tanh((radius - np.sqrt(xx ** 2 + yy ** 2 + zz ** 2)) / interface_width).astype(np.float32)
 
     return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
-def create_initial_condition_star_ch3d():
-    """Generates the star IC for the CH3D problem."""
-    S = CFG.GRID_RESOLUTION
-    L = CFG.L_DOMAIN
-    epsilon = CFG.EPSILON_PARAM
-    dt = float(CFG.DT)
-    Nt = CFG.TOTAL_TIME_STEPS
+
+def create_initial_condition_spinodal_ch3d():
+    """
+    Unseen but distribution-friendly IC for CH3D:
+      u0 ~ sum of cosines (spinodal-like), zero mean, values in [-0.9,0.9].
+      Much closer to GRF-like mass fraction than a single droplet.
+    """
+    S = CFG.GRID_RESOLUTION       # 32
+    L = CFG.L_DOMAIN              # 2.0
+    eps = CFG.EPSILON_PARAM       # 0.05
+    dt = float(CFG.DT)            # 0.001
+    Nt = CFG.TOTAL_TIME_STEPS     # 100
     selected_frames = [0, 20, 40, 60, 80, 100]
 
-    xx, yy, zz = _grid(S, L)
-    r = np.sqrt(xx ** 2 + yy ** 2 + zz ** 2) + 1e-9
+    dx = L / S
+    x = (-L/2.0) + dx * np.arange(S, dtype=np.float32)
+    xx, yy, zz = np.meshgrid(x, x, x, indexing="ij")
 
-    # Spherical coordinates to create star shape
-    theta = np.arccos(np.clip(zz / r, -1.0, 1.0))  # polar
-    phi = np.arctan2(yy, xx)  # azimuth
+    # choose a moderate wave number in each direction
+    k = 2.0 * np.pi / L * 2.0    # 2 wavelengths over the box
+    u0 = (
+        np.cos(k * xx)
+        + np.cos(k * yy + 0.7)   # small phase shifts
+        + np.cos(k * zz - 1.3)
+    ).astype(np.float32)
 
-    base_r = 0.5
-    amp = 0.10
-    freq = 6 # 5
+    # normalize to roughly [-1,1] then soften:
+    u0 = u0 / np.max(np.abs(u0))
+    u0 = 0.9 * u0                 # keep away from ±1
 
-    mod = 1.0 + amp * (np.cos(freq * theta) * np.cos(freq * phi))
-    r_star = base_r * mod
-    sdf = r_star - r
+    # zero mean (important for CH)
+    u0 = (u0 - u0.mean()).astype(np.float32)
 
-    u0 = np.tanh(sdf / (np.sqrt(2) * epsilon)).astype(np.float32)
+    # optional tiny noise so it’s not perfectly symmetric
+    u0 += 0.05 * np.random.randn(*u0.shape).astype(np.float32)
+    u0 = np.clip(u0, -0.9, 0.9)
 
     return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
 
+'''''
+def create_initial_condition_sphere_ch3d():
+    """
+    Smooth tanh sphere IC for CH3D, consistent with the training data:
+      - Domain: [-L/2, L/2]^3 with S^3 grid
+      - Radius ~ 0.9–1.0 in L=2 box
+      - Interface thickness w ≈ max(2*h, 2*epsilon)
+      - Values in (-1, 1), similar to ±1 binary GRF ICs
+    """
+    S = CFG.GRID_RESOLUTION      # 32
+    L = CFG.L_DOMAIN             # 2.0
+    eps = CFG.EPSILON_PARAM      # 0.05
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
+    selected_frames = [0, 20, 40, 60, 80, 100]
+
+    # half-open grid, as in your generators
+    dx = L / S
+    x = (-L / 2.0) + dx * np.arange(S, dtype=np.float32)
+    xx, yy, zz = np.meshgrid(x, x, x, indexing="ij")
+
+    # spherical geometry
+    r = np.sqrt(xx**2 + yy**2 + zz**2)
+
+    # radius ~1 fills a bit more than half the volume, like a "big droplet"
+    R = 0.1
+
+    # interface width: not razor-thin → at least a couple of cells, and ≥ ~2*eps
+    w = max(2.0 * dx, 10.0 * float(eps))
+
+    # CH-like phase field: inside ~+1, outside ~-1
+    u0 = np.tanh((R - r) / w).astype(np.float32)
+
+    # Keep it safely inside (-1,1) as in your other ICs
+    u0 = np.clip(u0, -0.999, 0.999)
+
+    # OPTIONAL: if you want *exact* zero mean (mass-conserving start), uncomment:
+    # u0 = (u0 - u0.mean()).astype(np.float32)
+    # u0 = np.clip(u0, -0.95, 0.95)
+
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
+'''
+def create_initial_condition_star_ch3d():
+    """
+    Star-shaped IC for CH3D, matching the MATLAB 'star' block and the
+    training parameters (L=2, eps=0.05, dt=1e-3, Nt=100).
+
+    u0 = tanh( (r_star - r) / (sqrt(2)*epsilon) )
+    """
+    S = CFG.GRID_RESOLUTION       # 32
+    L = CFG.L_DOMAIN              # 2.0
+    eps = CFG.EPSILON_PARAM       # 0.05
+    dt = float(CFG.DT)            # 0.001
+    Nt = CFG.TOTAL_TIME_STEPS     # 100
+    selected_frames = [0, 20, 40, 60, 80, 100]
+
+    # half-open periodic grid [-L/2, L/2)
+    dx = L / S
+    x = (-L/2.0) + dx * np.arange(S, dtype=np.float32)
+    xx, yy, zz = np.meshgrid(x, x, x, indexing="ij")
+
+    r = np.sqrt(xx**2 + yy**2 + zz**2) + 1e-9
+    theta = np.arccos(np.clip(zz / r, -1.0, 1.0))   # polar angle
+    phi   = np.arctan2(yy, xx)                      # azimuth
+
+    r0 = 0.5
+    a  = 0.10
+    w  = 6.0
+    r_star = r0 * (1.0 + a * np.cos(w*theta) * np.cos(w*phi))
+    sdf = r_star - r
+
+    interface_width = np.sqrt(2.0) * float(eps)
+    u0 = np.tanh(sdf / interface_width).astype(np.float32)
+    u0 = np.clip(u0, -0.999, 0.999)
+
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
+'''''
 def create_initial_condition_sphere_sh3d():
-    """Generates the sphere IC for the SH3D problem (identical profile to AC)."""
+    """
+    Smooth, dataset-friendly sphere IC for SH3D:
+      - half-open grid (matches numpy endpoint=False style)
+      - thick interface (>= ~3 grid cells and >= 3*epsilon)
+      - zero-mean
+      - gentle spectral low-pass (<= ~70% Nyquist per axis)
+      - clamp to [-0.9, 0.9]
+    """
     S = CFG.GRID_RESOLUTION
     L = CFG.L_DOMAIN
     epsilon = CFG.EPSILON_PARAM
@@ -207,11 +306,65 @@ def create_initial_condition_sphere_sh3d():
     Nt = CFG.TOTAL_TIME_STEPS
     selected_frames = [0, 20, 40, 60, 80, 100]
 
-    # identical sphere parameters across methods for a fair comparison
-    R = 0.5  # radius in domain units (match AC's value)
-    xx, yy, zz = _grid(S, L)
-    w = np.sqrt(2.0) * epsilon  # interface width
-    u0 = np.tanh((R - np.sqrt(xx**2 + yy**2 + zz**2)) / w).astype(np.float32)
+    # grid (half-open to match training generators)
+    dx = L / S
+    x = (-L/2) + dx * np.arange(S, dtype=np.float32)
+    xx, yy, zz = np.meshgrid(x, x, x, indexing="ij")
+
+    # geometry
+    R = 2.0  # sphere radius in SH domain units (L=15) – bigger & gentler than 0.5
+    r = np.sqrt(xx**2 + yy**2 + zz**2)
+
+    # interface width: ensure it's not razor-thin
+    w = max(3.0 * dx, 3.0 * float(epsilon))
+    u0 = np.tanh((R - r) / w).astype(np.float32)
+
+    # zero-mean
+    u0 = u0 - np.float32(u0.mean())
+
+    # gentle spectral low-pass (<= ~70% Nyquist per axis)
+    U = np.fft.fftn(u0); U = np.fft.fftshift(U)
+    k = np.arange(-S//2, S - S//2, dtype=np.float32)  # [-S/2 .. S/2-1]
+    KX, KY, KZ = np.meshgrid(k, k, k, indexing="ij")
+    rad = np.maximum.reduce((np.abs(KX)/(S/2), np.abs(KY)/(S/2), np.abs(KZ)/(S/2)))
+    mask = (rad <= 0.70)
+    U[~mask] = 0
+    U = np.fft.ifftshift(U)
+    u0 = np.fft.ifftn(U).real.astype(np.float32)
+
+    # clamp to safe range
+    u0 = np.clip(u0, -0.9, 0.9)
+
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
+'''
+
+def create_initial_condition_sphere_sh3d():
+    """
+    Balanced (zero-mean) sphere IC for SH3D to avoid saturation at -1.
+    This makes the IC comparable to others and plots look sensible.
+    """
+    S = CFG.GRID_RESOLUTION
+    L = CFG.L_DOMAIN
+    eps = CFG.EPSILON_PARAM
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
+    selected_frames = [0, 20, 40, 60, 80, 100]
+
+    # grid (half-open to match numpy endpoint=False style)
+    dx = L / S
+    x = (-L/2) + dx * np.arange(S, dtype=np.float32)
+    xx, yy, zz = np.meshgrid(x, x, x, indexing="ij")
+
+    # make the sphere bigger and the interface not razor-thin
+    R = 5.0 # 2.5                               # was 1.5 → tiny sphere → mean ~ -1
+    w = max(2.0 * dx, 2.0 * float(eps))   # thicker interface
+
+    r = np.sqrt(xx**2 + yy**2 + zz**2)
+    u0 = np.tanh((R - r) / w).astype(np.float32)
+
+    # balance it
+    u0 = (u0 - u0.mean()).astype(np.float32)  # zero-mean
+    u0 = np.clip(u0, -0.9, 0.9)               # avoid extremes
 
     return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
 
@@ -229,11 +382,11 @@ def create_initial_condition_star_pfc3d():
 
     # Star shape parameters (EXACTLY as in MATLAB)
     theta = np.arctan2(zz, xx)
-    R_theta = 5.0 + 1.0 * np.cos(6 * theta)
+    R_theta = 10.0 + 5.0 * np.cos(6 * theta)
     dist = np.sqrt(xx ** 2 + 2 * yy ** 2 + zz ** 2)
 
     # SMOOTH initial condition (matches MATLAB stable version)
-    interface_width = np.sqrt(2) * epsilon
+    interface_width = np.sqrt(49) * epsilon
     u0 = np.tanh((R_theta - dist) / interface_width).astype(np.float32)  # <-- SMOOTH!
 
 
@@ -257,12 +410,12 @@ def create_initial_condition_sphere_pfc3d():
 
     # Radius choice to mirror the MATLAB PFC3D example on L=10*pi
     # (if your config uses a different L, feel free to adjust R)
-    R = 6.0
+    R = 5.0
     interface_width = np.sqrt(2.0) * epsilon
     u0 = np.tanh((R - r) / interface_width).astype(np.float32)
 
     return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
-
+'''''
 def create_initial_condition_torus_mbe3d():
     S = CFG.GRID_RESOLUTION
     L = CFG.L_DOMAIN
@@ -316,13 +469,13 @@ def create_initial_condition_sphere_mbe3d():
     xx, yy, zz = _grid(S, L)
 
     # sphere geometry (centered; matches MBE dataset scale)
-    R = 0.9  # sphere radius used in the MATLAB generator 1.5
+    R = 1.5  # sphere radius used in the MATLAB generator 1.5
     r = np.sqrt(xx**2 + yy**2 + zz**2)
     phi = R - r
 
     # interface width: match dataset (≈ 4*epsilon), but not thinner than ~3 grid cells
     hx = L / S
-    w = max(1.0 * hx, 4.0 * float(epsilon)) # from 3 to 9
+    w = max(1.0 * hx, 2.0 * float(epsilon)) # from 3 to 9
 
     # smooth phase field
     u0 = np.tanh(phi / w).astype(np.float32)
@@ -332,31 +485,166 @@ def create_initial_condition_sphere_mbe3d():
     u0 = np.clip(u0, -0.999, 0.999)
 
     return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
+'''
+
+
+def create_initial_condition_sphere_mbe3d():
+    """
+    Smooth tanh sphere IC for MBE3D, consistent with the dataset:
+      - Domain: [-L/2, L/2]^3 with S^3 grid
+      - Radius ~ 1.5
+      - Interface thickness w ≈ max(h, 2*epsilon)
+      - Zero-mean and gentle clamp to (-0.999, 0.999)
+    """
+    S = CFG.GRID_RESOLUTION
+    L = CFG.L_DOMAIN
+    epsilon = CFG.EPSILON_PARAM
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
+    selected_frames = [0, 20, 40, 60, 80, 100]
+
+    # grid
+    xx, yy, zz = _grid(S, L)
+
+    # sphere geometry (centered)
+    R = 0.5
+    r = np.sqrt(xx**2 + yy**2 + zz**2)
+    phi = R - r
+
+    # interface width (match MATLAB / your Python description)
+    hx = L / S
+    w = max(1.0 * hx, 2.0 * float(epsilon))
+
+    # smooth phase field
+    u0 = np.tanh(phi / w).astype(np.float32)
+
+    # preprocessing: zero mean, gentle clamp
+    u0 = u0 - np.float32(u0.mean())
+    u0 = np.clip(u0, -0.999, 0.999)
+
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
+
+def create_initial_condition_torus_mbe3d():
+    """
+    Smooth tanh torus IC for MBE3D, consistent with the dataset:
+      - Domain: [-L/2, L/2]^3 with S^3 grid
+      - Major radius R ≈ 1.9, tube radius r0 ≈ 1.0
+      - Interface thickness w ≈ max(3*h, 2*epsilon)
+      - Zero-mean and gentle clamp to (-0.999, 0.999)
+    """
+    S = CFG.GRID_RESOLUTION
+    L = CFG.L_DOMAIN
+    epsilon = CFG.EPSILON_PARAM
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
+    selected_frames = [0, 20, 40, 60, 80, 100]
+
+    # grid
+    xx, yy, zz = _grid(S, L)
+
+    # torus geometry (inside ~[-π, π]^3 like your MATLAB code)
+    R = 0.5       # major radius
+    r0 = 0.1      # tube radius
+    rho = np.sqrt(xx**2 + yy**2)
+    phi = r0 - np.sqrt((rho - R)**2 + zz**2)  # signed distance–like
+
+    # interface width: match MATLAB/description
+    hx = L / S
+    w = max(3.0 * hx, 2.0 * float(epsilon))
+
+    u0 = np.tanh(phi / w).astype(np.float32)
+
+    # preprocessing: zero mean, gentle clamp
+    u0 = u0 - np.float32(u0.mean())
+    u0 = np.clip(u0, -0.999, 0.999)
+
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
+
+def create_initial_condition_star_mbe3d():
+    """
+    Star-shaped IC analogous to your MATLAB 'star' case:
+
+        Nx = Ny = Nz = 32
+        Lx = 10*pi (bigger domain)            <-- see note below
+        epsilon = 0.5
+        theta = atan2(zz, xx)
+        R_theta = 5.0 + 1.0*cos(6*theta)
+        dist = sqrt(xx^2 + 2*yy^2 + zz^2)
+        u = tanh((R_theta - dist)/sqrt(2)*epsilon)
+
+    Here we keep the same *style* as your other Python ICs
+    (use CFG, zero-mean, clamp). For *exact* geometric match
+    to your MATLAB star, set:
+
+        CFG.L_DOMAIN     = 10*np.pi
+        CFG.EPSILON_PARAM = 0.5
+    """
+    S = CFG.GRID_RESOLUTION
+    L = CFG.L_DOMAIN          # set this to 10*np.pi to match MATLAB exactly
+    epsilon = CFG.EPSILON_PARAM
+    dt = float(CFG.DT)
+    Nt = CFG.TOTAL_TIME_STEPS
+    selected_frames = [0, 20, 40, 60, 80, 100]
+
+    # grid
+    xx, yy, zz = _grid(S, L)
+
+    # star-shaped geometry
+    theta = np.arctan2(zz, xx)           # angle in x–z plane
+    R0 = 5.0
+    A = 1.0
+    R_theta = R0 + A * np.cos(6.0 * theta)  # 6-pointed star
+
+    dist = np.sqrt(xx**2 + 2.0 * yy**2 + zz**2)
+
+    # interface width (from MATLAB: sqrt(2)*epsilon)
+    w = np.sqrt(2.0) * float(epsilon)
+
+    u0 = np.tanh((R_theta - dist) / w).astype(np.float32)
+
+    # make it consistent with your other ICs: zero-mean, clamp
+    u0 = u0 - np.float32(u0.mean())
+    u0 = np.clip(u0, -0.999, 0.999)
+
+    return u0, (L, L, L), (S, S, S), Nt, dt, selected_frames
 
 # ----------------------------------------------------
 # 3) Model Loading
 # ----------------------------------------------------
 def load_model(method: str, model_type: str, device: torch.device):
-    """Loads a model checkpoint based on its type (FNO4d or TNO3d)."""
+    path = CKPTS[method][1]
+    # Avoid weights_only to keep broad compatibility
+    ckpt = torch.load(path, map_location="cpu")
+
     if model_type == "FNO4d":
         model = FNO4d(
             modes1=CFG.MODES, modes2=CFG.MODES, modes3=CFG.MODES, modes4_internal=None,
-            width=CFG.WIDTH, width_q=CFG.WIDTH_Q, T_in_channels=CFG.T_IN_CHANNELS,
-            n_layers=CFG.N_LAYERS
+            width=CFG.WIDTH, width_q=getattr(CFG, "WIDTH_Q", CFG.WIDTH),  # harmless
+            T_in_channels=CFG.T_IN_CHANNELS, n_layers=CFG.N_LAYERS
         ).to(device)
+
     elif model_type == "TNO3d":
+        sd = ckpt["state_dict"]
+
+        # Infer widths from the checkpoint if present; otherwise fall back to CFG
+        wq = sd.get("q.layers.0.weight", None)
+        wh = sd.get("h.layers.0.weight", None)
+        width_q = int(wq.shape[0]) if wq is not None else CFG.WIDTH_Q
+        width_h = int(wh.shape[0]) if wh is not None else CFG.WIDTH_H
+
         model = TNO3d(
             modes1=CFG.MODES, modes2=CFG.MODES, modes3=CFG.MODES,
-            width=CFG.WIDTH, width_q=CFG.WIDTH_Q, width_h=CFG.WIDTH_H,
+            width=CFG.WIDTH, width_q=width_q, width_h=width_h,
             T_in=CFG.T_IN_CHANNELS, T_out=1, n_layers=CFG.N_LAYERS
         ).to(device)
+
     else:
         raise ValueError(f"Unknown model_type: {model_type}")
 
-    path = CKPTS[method][1]
-    ckpt = torch.load(path, map_location=device, weights_only=True)
     model.load_state_dict(ckpt["state_dict"])
     model.eval()
+    # Move to device after loading for safety if you prefer:
+    model.to(device)
     return model
 
 ## CH3D
@@ -397,6 +685,38 @@ def semi_implicit_step_ch3d(u, dt, dx, epsilon):
     u_next = tfft.ifftn(V, dim=(-3, -2, -1)).real  # (B,Sx,Sy,Sz)
     return u_next.unsqueeze(-1)                     # (B,Sx,Sy,Sz,1)
 
+import torch.fft as tfft
+
+def semi_implicit_step_sh3d(u, dt, dx, epsilon):
+    """
+    SH3D semi-implicit (matches your MATLAB DNS):
+        v̂ = (Û/dt - F[u^3] + 2*K2*Û) / (1/dt + (1-ε) + K2^2)
+        u^{n+1} = ifftn(v̂)
+    u: (B,S,S,S,1) real
+    """
+    u = u[..., 0]  # (B,Sx,Sy,Sz)
+
+    B, Sx, Sy, Sz = u.shape
+    kx = 2 * np.pi * np.fft.fftfreq(Sx, d=dx)
+    ky = 2 * np.pi * np.fft.fftfreq(Sy, d=dx)
+    kz = 2 * np.pi * np.fft.fftfreq(Sz, d=dx)
+
+    KX2 = torch.from_numpy((kx.astype(np.float32))**2).to(u.device)
+    KY2 = torch.from_numpy((ky.astype(np.float32))**2).to(u.device)
+    KZ2 = torch.from_numpy((kz.astype(np.float32))**2).to(u.device)
+    K2x, K2y, K2z = torch.meshgrid(KX2, KY2, KZ2, indexing="ij")
+    K2 = K2x + K2y + K2z
+    del K2x, K2y, K2z
+
+    U  = tfft.fftn(u, dim=(-3, -2, -1))
+    NL = tfft.fftn(u**3, dim=(-3, -2, -1))
+
+    numer = (U / dt) - NL + 2.0 * K2 * U
+    denom = (1.0 / dt) + (1.0 - float(epsilon)) + (K2 ** 2)
+
+    V = numer / denom
+    u_next = tfft.ifftn(V, dim=(-3, -2, -1)).real
+    return u_next.unsqueeze(-1)
 
 # -----------------------------------------------------------
 # 4) Bootstrap T_in window with semi-implicit teacher
@@ -412,6 +732,8 @@ def bootstrap_states_from_u0(u0_np: np.ndarray, T_in: int, device: torch.device)
             u = semi_implicit_step_ch3d(u, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)  # <<< use CH step
         elif CFG.PROBLEM == 'MBE3D':
             u = semi_implicit_step_mbe(u, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)   # <<< MBE teacher
+        elif CFG.PROBLEM == 'SH3D':
+            u = semi_implicit_step_sh(u, CFG.DT, CFG.DX, CFG.EPSILON_PARAM)  # <<< NEW
         else:
             u = semi_implicit_step(u, CFG.DT, CFG.DX, CFG.EPS2)  # AC/SH path as before
         states.append(u)
@@ -446,6 +768,28 @@ def rollout_aligned(model, x0: torch.Tensor, teacher_states: list, Nt: int):
     steps_to_predict = Nt + 1 - T_in
     for _ in range(steps_to_predict):
         y_pred = model(x)
+
+        # --- NEW: enforce CH mass conservation just like in training ---
+        #if CFG.PROBLEM == 'CH3D':
+        #    last_in = x[..., -1:]  # (B,S,S,S,1)
+        #    y_pred = mass_project_pred(y_raw, last_in)
+
+        #elif CFG.PROBLEM == 'PFC3D':
+        #    # <<< NEW: same as rollout_autoregressive >>>
+        #    last_in = x[..., -1:]  # (B,S,S,S,1)
+        #    ##y_pred = physics_guided_update_pfc_optimal(last_in, y_raw, alpha_cap=0.6, low_k_snap_frac=0.45)
+        #    y_pred = mass_project_pred(y_raw, last_in)
+
+        #if CFG.PROBLEM == 'MBE3D':
+        #    # <<< NEW: same as rollout_autoregressive >>>
+        #    last_in = x[..., -1:]  # (B,S,S,S,1)
+        #    ##y_pred = physics_guided_update_pfc_optimal(last_in, y_raw, alpha_cap=0.6, low_k_snap_frac=0.45)
+        #    y_pred = mass_project_pred(y_raw, last_in)
+
+        #else:
+        #    y_pred = y_raw
+
+
         seq.append(y_pred.squeeze(0).squeeze(-1).cpu().numpy())
         x = torch.cat([x[..., 1:], y_pred], dim=-1)
 
@@ -552,6 +896,27 @@ def main():
         model = load_model(method, model_type, device=device)
         vols = rollout_aligned(model, x0, teacher_states, Nt=Nt)
         vols = _check_finite(vols, method)  # add this
+        # -------------------------------------------------------
+        # AFTER YOU COMPUTE 'vols' FOR THIS METHOD
+        # -------------------------------------------------------
+
+        if method == "PurePhysics":
+            with torch.no_grad():
+                u_last = teacher_states[-1]  # (1,32,32,32,1)
+                y_raw = model(x0)
+                if CFG.PROBLEM == 'CH3D' or CFG.PROBLEM == 'PFC3D' or CFG.PROBLEM == 'MBE3D':
+                    y_proj = mass_project_pred(y_raw, u_last)
+                    y_show = y_proj
+                else:
+                    y_show = y_raw
+                y_np = y_show.squeeze().cpu().numpy()
+
+            print("PurePhysics single-step debug (after mass projection):")
+            print("  teacher last frame: range [%.4f, %.4f], mean=%.4f" %
+                  (u_last.min().item(), u_last.max().item(), u_last.mean().item()))
+            print("  model next frame:   range [%.4f, %.4f], mean=%.4f" %
+                  (y_np.min(), y_np.max(), y_np.mean()))
+
         volumes_by_method[method] = vols
 
         del model
