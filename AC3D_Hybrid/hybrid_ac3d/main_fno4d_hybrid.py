@@ -2,10 +2,22 @@ import os  # <- minimal addition
 import torch, numpy as np, random
 import config
 from networks import FNO4d, TNO3d
-from utilities import build_loaders, train_fno_hybrid, evaluate_stats_and_plot
+from utilities import build_loaders, train_fno_hybrid, evaluate_stats_and_plot #, train_ac_beamstyle, train_ch_beamstyle,train_sh_beamstyle
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
+from timeit import default_timer as timer
 
+'''''
+# choose the correct beam-style trainer
+if config.PROBLEM == 'AC3D':
+    trainer_fn = train_ac_beamstyle
+elif config.PROBLEM == 'CH3D':
+    trainer_fn = train_ch_beamstyle
+elif config.PROBLEM == 'SH3D':
+    trainer_fn = train_sh_beamstyle
+else:
+    raise ValueError(f"Unsupported PROBLEM={config.PROBLEM} for beam-style trainer")
+'''
 
 def set_seeds(seed=42):
     np.random.seed(seed)
@@ -14,7 +26,7 @@ def set_seeds(seed=42):
     if torch.cuda.is_available(): torch.cuda.manual_seed_all(seed)
 
 def main():
-    set_seeds(config.SEED)
+    config.seed_everything(config.SEED)   # <--- important, before loaders/model
     device = config.DEVICE
     print("Using device:", device)
     print('PDE_WEIGHT is: ', config.PDE_WEIGHT)
@@ -22,6 +34,8 @@ def main():
     print('Problem is: ', config.PROBLEM)
     print('N_Train is: ', config.N_TRAIN)
     print('STEPS_PER_EPOCH is: ', config.STEPS_PER_EPOCH)
+    #print('DATA_LOSS_SCALE is: ', config.DATA_LOSS_SCALE)
+
 
     # (tiny clarity prints; no behavioral change)
     print(f"Grid: N={config.GRID_RESOLUTION}, L={config.L_DOMAIN:g}, dx={config.DX:g}")
@@ -83,7 +97,26 @@ def main():
     scheduler = CosineAnnealingLR(optimizer, T_max=TOTAL_STEPS)  # step this every batch
 
     # Train (hybrid, with PINNs-style debug prints)
-    train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, device, pde_weight=config.PDE_WEIGHT)
+    #train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, device, pde_weight=config.PDE_WEIGHT)
+    # pick λ and α (manual, like the beam study)
+    #lam = config.PDE_WEIGHT  # e.g., 0.25
+    #alpha = config.DATA_LOSS_SCALE  # e.g., 1e7 after checking epoch-0 magnitudes
+    '''
+    trainer_fn(
+        model, train_loader, test_loader, optimizer, config.DEVICE,
+        lambda_tradeoff=config.PDE_WEIGHT,
+        data_loss_scaling_factor=getattr(config, "DATA_LOSS_SCALE", 1.0),
+        use_lbfgs=config.use_lbfgs,  # or True if you want to try it
+        lbfgs_max_iter=30
+    )
+    '''
+    start_train = timer()
+    train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, config.DEVICE, pde_weight=config.PDE_WEIGHT)
+
+    end_train = timer()
+    total_sec = end_train - start_train
+    print(f"\n[Timing] Total training time = {total_sec:.2f} seconds ({total_sec / 60:.2f} minutes)\n")
+
 
     # Evaluate: stats + 3×len(times) plot
     evaluate_stats_and_plot(model, config.MAT_DATA_PATH, test_ids, times=config.EVAL_TIME_FRAMES)
