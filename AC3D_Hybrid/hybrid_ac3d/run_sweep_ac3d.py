@@ -229,13 +229,13 @@ def train_fno_hybrid_LOGGING_STEPBASED(model, train_loader, test_loader, optimiz
             #y_hat2 = physics_guided_update_ac_optimal(x2[..., -1:], y_hat2, alpha_cap=0.6, low_k_snap_frac=0.45)
             #loss_scheme2 = F.mse_loss(y_hat2, u_si2)
             #loss_scheme = w_scheme * (0.6 * loss_scheme1 + 0.4 * loss_scheme2)
-            loss_scheme = w_scheme * (0.6 * loss_scheme1 )
+            loss_scheme = w_scheme * ( loss_scheme1 )
             # low-k anchor (stabilize coarse scales)
             l_lowk = low_k_mse(y_pred, u_si1, frac=0.45)
 
             # physics mix and energy (mirror SH/PFC style)
             #loss_phys = 6e-3 * (1.0 * l_fft + 0.7 * l_mid_norm + w_lowk * 0.40 * l_lowk)
-            loss_phys = 1e-3 * ( 0.7 * l_mid_norm + w_lowk * 0.40 * l_lowk)
+            loss_phys = 1e-3 * ( l_mid_norm + w_lowk * l_lowk)
             loss_energy = 0.03 * energy_penalty(u_in_last, y_pred, CFG.DX, CFG.EPS2)
 
             # total
