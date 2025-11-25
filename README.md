@@ -4,9 +4,9 @@ This repository contains the official implementation of **PENCO** (Physics–Ene
 
 PENCO combines:
 - **Neural operators** (spectral/Fourier-based),
-- **Physics constraints** (PDE residuals),
-- **Numerical scheme consistency**, and
-- **Thermodynamic energy dissipation**,
+- **Physics constraints** (PDE residuals evaluated at symmetric Gauss–Lobatto collocation points),
+- **Numerical consistency** (alignment with a stable semi-implicit update),
+- **Thermodynamic energy dissipation** (enforcing one-sided free-energy decay),
 
 to achieve **accurate, stable, and physically consistent** long-horizon predictions with **very limited training data**.
 
@@ -321,17 +321,21 @@ A complete collection of all OOD evaluation plots (spherical, star-shaped, torus
 
 ## 6. Key Takeaways
 
-- PENCO combines:
-  - **Operator learning** (neural spectral operators),
-  - **Physics enforcement** (PDE residuals, energy dissipation),
-  - **Numerical scheme consistency** (IMEX semi-implicit teacher),
-  - **Spectral anchoring** (low-frequency stability).
+Compared to FNO-4D and MHNO, PENCO demonstrates:
 
-- Compared to FNO-4D and MHNO:
-  - Improved **stability** and **accuracy** on long horizons,
-  - Superior **data efficiency** (50–200 trajectories),
-  - Strong **OOD generalization** to unseen geometries (sphere, star, torus),
-  - Maintains physically consistent evolution (energy decay, correct coarsening, wavelength selection).
+- **Superior long-horizon stability and accuracy**, enabled by physics-consistent training,
+- **High data efficiency**, achieving strong performance with only 50–200 training trajectories,
+- **Robust OOD generalization** to geometries entirely absent from the training distribution (spherical, star-shaped, torus initializations),
+- **Physically faithful evolution**, consistently preserving energy decay, correct coarsening rates, interface sharpness, and wavelength-selection behavior.
+
+Furthermore, PENCO achieves these improvements with a much lighter computational footprint, including:
+
+- **32³ spatial resolution**, far smaller than typical operator-learning configurations,
+- **Only two spectral operator layers**, minimizing model depth while retaining expressiveness,
+- **A training horizon reduced by a factor of ten**, achieving stable convergence with only ~10% of the epochs normally required,
+- **No loss in accuracy, stability, or generalization**, despite the significantly reduced computational budget.
+
+Together, these factors demonstrate PENCO’s efficiency and scalability for large-scale 3D phase-field modeling.
 
 ---
 
