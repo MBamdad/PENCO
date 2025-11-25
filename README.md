@@ -83,27 +83,34 @@ Instead of only minimizing a data regression loss, PENCO optimizes
 > 𝓛\_total = (1 − λ) · α · 𝓛\_data + λ · 𝓛\_phys,  with λ ∈ [0, 1],
 
 where:
-- **𝓛\_data**: standard L² prediction error vs. ground-truth solution,
-- **𝓛\_phys**: physics-guided loss enforcing
-  - PDE residuals,
-  - scheme consistency,
-  - energy dissipation, and
-  - low-frequency spectral anchoring.
+- **𝓛_data**: standard prediction error against the ground-truth solution, measured using the MSE formulation.
+- **𝓛_phys**: physics-guided regularization composed of:
+  - **PDE residuals** at symmetric Gauss–Lobatto collocation points,
+  - **Numerical scheme consistency** via a semi-implicit reference update,
+  - **Energy dissipation** through one-sided free-energy decay enforcement,
+  - **Low-frequency spectral anchoring** to stabilize large-scale modes.
 
 A typical choice:
 - α = 10³,
 - λ = 0.25 for hybrid training,
 - λ = 1.0 for pure-physics training.
 
-### 3.1 Physics-Guided Loss Components
+### 𝓛_colloc (PDE collocation residual)
 
-The physics-based term is
+Enforces the PDE inside each time step using L² Gauss–Lobatto collocation.  
+The residual is evaluated at two temporal points:
 
-> 𝓛\_phys = w₁ (𝓛\_colloc + w₄ 𝓛\_anchor) + w₂ 𝓛\_scheme + w₃ 𝓛\_energy.
+**τ₁,₂ = 1/2 ± 1/(2√5)**
 
-- **𝓛\_colloc (PDE collocation residual)**  
-  Enforces the governing PDE inside each time step using **L² Gauss–Lobatto collocation** at two symmetric nodes around the temporal midpoint.  
-  Residuals are normalized to stabilize training, and their average L² norm is penalized.
+At each τ, the PDE residual is computed as:
+
+- the predicted time derivative  
+  **(ûⁿ⁺¹ − uⁿ) / Δt**
+- minus the PDE right-hand side evaluated at the interpolated state  
+  **(1 − τ)·uⁿ + τ·ûⁿ⁺¹**
+  
+The two residuals are normalized and combined through their L² norm to form the collocation loss.
+
 
 - **𝓛\_scheme (numerical scheme consistency)**  
   Aligns the network update with a **semi-implicit IMEX time-stepping scheme**:
@@ -125,10 +132,23 @@ The physics-based term is
 
 ### 3.2 Time-Dependent Weights
 
-- w₁ = 10⁻³, w₃ = 0.3 (fixed across training).
-- w₂(e), w₄(e) depend smoothly on the epoch e (e = 0,…,E−1):
-  - Early training: higher weight on scheme consistency (stabilizes short-horizon updates),
-  - Later training: increased anchor weight (reinforces spectral stability and long-horizon robustness).
+- **w₁ = 10⁻³** and **w₃ = 0.3** (fixed throughout training).
+
+- **w₂ and w₄ (epoch-dependent weights)**  
+  These weights evolve smoothly over training following:
+
+  ```
+  w₂(e) = 0.32 − 0.12 * (e / (E − 1))
+  ```
+
+  ```
+  w₄(e) = 0.25 + 0.6 * (e / (E − 1))²
+  ```
+
+  where **e** is the current epoch and **E** is the total number of epochs.
+
+  - **Early training:** larger w₂ provides stronger emphasis on scheme consistency, improving short-horizon stability.  
+  - **Later training:** increasing w₄ strengthens spectral anchoring, reducing long-horizon drift and stabilizing low-frequency modes.
 
 ---
 
