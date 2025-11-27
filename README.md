@@ -302,7 +302,18 @@ The 3D iso-surface evolution captures full volumetric coarsening behavior. PENCO
 
 ---
 
+## 📈 5.2 Aggregate In-Distribution Error Across All five PDEs
 
+To provide a unified comparison across all five phase-field systems, the figure below shows the **Relative L² error over time** for FNO-4D, MHNO, pure-physics training, and the two hybrid PENCO variants.  
+This summary highlights PENCO’s strong in-distribution performance, demonstrating:
+
+- lower error across the full rollout,
+- improved stability during early transient dynamics,
+- and significantly reduced long-horizon drift compared to purely data-driven operators.
+
+![](https://github.com/MBamdad/PENCO/blob/main/AC3D_Hybrid/hybrid_ac3d/In%20Distribution%20results.png)
+
+---
 ### 5.2 📘 Out-of-Distribution (OOD) Results
 
 To test robustness beyond GRF-based initial conditions, we evaluate on **deterministic geometries**:
@@ -312,7 +323,6 @@ To test robustness beyond GRF-based initial conditions, we evaluate on **determi
 - **MBE**: torus configuration
 
 These shapes differ significantly from training data in curvature, interface width, and topology, making them a stringent test of OOD generalization.
-
 
 **Summary of OOD behavior:**
 
@@ -338,7 +348,6 @@ A complete collection of all OOD evaluation plots (spherical, star-shaped, torus
 ![](https://github.com/MBamdad/PENCO/blob/main/AC3D_Hybrid/hybrid_ac3d/OOD_plots-1.png)
 
 ---
-
 ## 6. Key Takeaways
 
 Compared to FNO-4D and MHNO, PENCO demonstrates:
