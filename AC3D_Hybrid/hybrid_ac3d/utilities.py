@@ -10,31 +10,29 @@ from torch.cuda.amp import autocast
 import math
 from functions import (
     physics_residual_midpoint, scheme_residual_fourier, loss_mm_projection,
-    semi_implicit_step, energy_penalty, physics_residual_normalized,physics_collocation_GL3_AC,energy_dissipation_identity_AC,
-    hminus1_mse  ,physics_collocation_GL4_AC,physics_collocation_Radau3R_AC,residual_orthogonality_P2_AC,weak_residual_lowK_AC,mean_evolution_AC,
-    ac_scheme_residual_fourier,physics_collocation_GL3_CH_Hm1,
+    semi_implicit_step, energy_penalty, physics_residual_normalized,
+    hminus1_mse,
+
     # ---- SH additions ----
     semi_implicit_step_sh,                    # SH semi-implicit teacher step
     physics_collocation_tau_L2_SH,            # SH collocation residual (L2)
     energy_penalty_sh,                        # SH energy hinge
-    _mid_residual_norm_sh, physics_guided_update_sh_optimal,ch_two_step_consistency,
+    _mid_residual_norm_sh,
     low_k_mse,
     # ---- PFC additions ----
     semi_implicit_step_pfc,
     physics_collocation_tau_L2_PFC,
-    physics_guided_update_pfc_optimal, energy_penalty_pfc,
+    energy_penalty_pfc,
     semi_implicit_step_mbe,
     physics_collocation_tau_L2_MBE, mass_project_pred,
-    energy_penalty_mbe, physics_guided_update_mbe_optimal,mass_penalty, physics_collocation_tau_Hm1_MBE,
+    energy_penalty_mbe,mass_penalty,
     # ---- NEW: identical-form L2 collocation for AC & CH ----
-    physics_collocation_tau_L2_AC,physics_collocation_GL3_AC_interface,ac_mm_prox_step, loss_ac_mm_prox,
+    physics_collocation_tau_L2_AC,
     pde_rhs,
     # ---- CH additions ----
-    semi_implicit_step_ch,physics_collocation_GL5_CH_Hm2,
-    physics_collocation_tau_L2_CH,physics_guided_update_ch_optimal,physics_collocation_tau_Hm1_CH,
-    physics_collocation_tau_L2_AC,physics_guided_update_ac_optimal,
-    physics_collocation_GL3_CH,energy_dissipation_identity_CH,ch_symbolic_residual_Hm2,
-    physics_collocation_GL5_SH_Hm2,energy_dissipation_identity_SH
+    semi_implicit_step_ch,
+    physics_collocation_tau_L2_CH,
+    physics_collocation_tau_L2_AC,
 )
 
 
@@ -276,21 +274,21 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
                 u_si1 = semi_implicit_step(u_in_last, config.DT, config.DX, config.EPS2)
                 loss_scheme1 = F.mse_loss(y_hat, u_si1)
 
-                with torch.no_grad():
-                    u_si2 = semi_implicit_step(u_si1, config.DT, config.DX, config.EPS2)
+                #with torch.no_grad():
+                #    u_si2 = semi_implicit_step(u_si1, config.DT, config.DX, config.EPS2)
 
-                x2 = torch.cat([x[..., 1:], y_hat], dim=-1)
-                y_hat2 = model(x2)
-                y_hat2 = physics_guided_update_ac_optimal(x2[..., -1:], y_hat2, alpha_cap=0.6, low_k_snap_frac=0.45)
-                loss_scheme2 = F.mse_loss(y_hat2, u_si2)
+                #x2 = torch.cat([x[..., 1:], y_hat], dim=-1)
+                #y_hat2 = model(x2)
+                #y_hat2 = physics_guided_update_ac_optimal(x2[..., -1:], y_hat2, alpha_cap=0.6, low_k_snap_frac=0.45)
+                #loss_scheme2 = F.mse_loss(y_hat2, u_si2)
                 loss_scheme = w_scheme * ( loss_scheme1 )
 
                 # low-k anchor (stabilize coarse scales)
                 l_lowk = low_k_mse(y_hat, u_si1, frac=0.45)
 
                 # physics mix and energy (mirror SH/PFC style)
-                loss_phys = 1e-3 * (l_mid_norm +  w_lowk * l_lowk)
-                #loss_phys =  (  l_mid_norm + 1e-3 * w_lowk * l_lowk)
+                #loss_phys = 1e-3 * (l_mid_norm +  w_lowk * l_lowk)
+                loss_phys =  ( w_lowk * l_mid_norm +   1e-4 * l_lowk)
 
                 loss_energy = 0.3 * energy_penalty(u_in_last, y_hat, config.DX, config.EPS2)
             # correct
@@ -327,7 +325,7 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
                 # )
                 # loss_scheme2 = F.mse_loss(y_hat2, u_si2)
                 # loss_scheme = w_scheme * (0.6 * loss_scheme1 + 0.4 * loss_scheme2)
-                loss_scheme = w_scheme * (0.6 * loss_scheme1)
+                loss_scheme = w_scheme * ( loss_scheme1)
 
                 # --- spectral low-k anchor (a bit stronger for CH) ---
                 l_lowk = low_k_mse(y_hat, u_si1, frac=0.50)
