@@ -72,86 +72,145 @@ We benchmark PENCO against two state-of-the-art neural operator architectures.
 - Still trained with a purely data-driven loss (mean-squared error),
 - No explicit guarantee of energy decay or numerical scheme consistency.
 
----
-
 ## 3. PENCO: Physics–Energy–Numerical–Consistent Operator
 
-PENCO keeps a compact **spectral neural operator backbone** but fundamentally changes the **training objective**.
+PENCO keeps a compact spectral operator backbone while fundamentally enhancing the **training objective** by embedding
+physical, energetic, and numerical structure into the loss.  
+The total loss is:
 
-Instead of only minimizing a data regression loss, PENCO optimizes
-
-> 𝓛\_total = (1 − λ) · α · 𝓛\_data + λ · 𝓛\_phys,  with λ ∈ [0, 1],
+```
+L_total = (1 − λ) * α * L_data  +  λ * L_phys
+```
 
 where:
-- **𝓛_data**: standard prediction error against the ground-truth solution, measured using the MSE formulation.
-- **𝓛_phys**: physics-guided regularization composed of:
-  - **PDE residuals** at symmetric Gauss–Lobatto collocation points,
-  - **Numerical scheme consistency** via a semi-implicit reference update,
-  - **Energy dissipation** through one-sided free-energy decay enforcement,
-  - **Low-frequency spectral anchoring** to stabilize large-scale modes.
-
-A typical choice:
-- α = 10³,
-- λ = 0.25 for hybrid training,
-- λ = 1.0 for pure-physics training.
-
-### 𝓛_colloc (PDE collocation residual)
-
-Enforces the PDE inside each time step using L² Gauss–Lobatto collocation.  
-The residual is evaluated at two temporal points:
-
-**τ₁,₂ = 1/2 ± 1/(2√5)**
-
-At each τ, the PDE residual is computed as:
-
-- the predicted time derivative  
-  **(ûⁿ⁺¹ − uⁿ) / Δt**
-- minus the PDE right-hand side evaluated at the interpolated state  
-  **(1 − τ)·uⁿ + τ·ûⁿ⁺¹**
-  
-The two residuals are normalized and combined through their L² norm to form the collocation loss.
-
-
-- **𝓛\_scheme (numerical scheme consistency)**  
-  Aligns the network update with a **semi-implicit IMEX time-stepping scheme**:
-  - Linear stiff terms treated implicitly,
-  - Nonlinear terms treated explicitly,
-  - Mobility operator encodes gradient flow geometry.  
-  The neural prediction is penalized if it deviates from the semi-implicit update.
-
-- **𝓛\_energy (thermodynamic consistency)**  
-  Penalizes any **increase in free energy** between successive time steps:
-  - E[uⁿ⁺¹] ≤ E[uⁿ] enforced via a one-sided penalty,
-  - E[u] includes double-well bulk energy and gradient regularization terms (and higher-order contributions when relevant).
-
-- **𝓛\_anchor (low-frequency spectral anchoring)**  
-  Compares the **low-wavenumber Fourier modes** of:
-  - predicted field, and
-  - semi-implicit teacher.  
-  This prevents large-scale spectral drift and maintains coherent long-range structure.
-
-### 3.2 Time-Dependent Weights
-
-- **w₁ = 10⁻³** and **w₃ = 0.3** (fixed throughout training).
-
-- **w₂ and w₄ (epoch-dependent weights)**  
-  These weights evolve smoothly over training following:
-
-  ```
-  w₂(e) = 0.32 − 0.12 * (e / (E − 1))
-  ```
-
-  ```
-  w₄(e) = 0.25 + 0.6 * (e / (E − 1))²
-  ```
-
-  where **e** is the current epoch and **E** is the total number of epochs.
-
-  - **Early training:** larger w₂ provides stronger emphasis on scheme consistency, improving short-horizon stability.  
-  - **Later training:** increasing w₄ strengthens spectral anchoring, reducing long-horizon drift and stabilizing low-frequency modes.
+- **L_data** : data-supervision loss,
+- **L_phys** : physics-guided regularization,
+- **λ ∈ [0,1]** controls the balance (λ = 0.25 for hybrid, λ = 1.0 for pure physics),
+- **α = 1e3** scales the data term.
 
 ---
 
+### 3.1 Data Loss
+
+The supervised training error is:
+
+```
+L_data = || u_hat^{n+1} − u_true^{n+1} ||_2^2
+```
+
+This measures the L²/MSE discrepancy between predicted and reference solutions.
+
+---
+
+### 3.2 Physics-Guided Loss
+
+The physics term is composed of four complementary parts:
+
+```
+L_phys = w1 * ( L_colloc + w2 * L_anchor )
+       + w3 * L_scheme
+       + w4 * L_energy
+```
+
+It includes:
+
+- **PDE collocation residuals**  
+  Enforces the PDE inside each time step using Gauss–Lobatto collocation.
+
+- **Numerical scheme consistency**  
+  Aligns the model update with a semi-implicit IMEX reference step.
+
+- **Energy dissipation**  
+  Penalizes any increase in the free-energy functional.
+
+- **Low-frequency spectral anchoring**  
+  Stabilizes long-wavelength Fourier modes.
+
+---
+
+### 𝓛_colloc — PDE Collocation Residual
+
+The PDE residual is evaluated at two symmetric Gauss–Lobatto points:
+
+```
+τ1, τ2 = 1/2 ± 1/(2√5)
+```
+
+At each collocation point τ:
+
+1. Compute predicted time derivative:  
+   ```
+   (u_hat^{n+1} − u^n) / Δt
+   ```
+
+2. Compute PDE RHS at the interpolated state:  
+   ```
+   u_τ = (1 − τ)*u^n + τ*u_hat^{n+1}
+   ```
+
+3. Residual = (1) − (2), normalized and added into the L² penalty.
+
+---
+
+### 𝓛_scheme — Numerical Scheme Consistency
+
+Encourages agreement with a semi-implicit IMEX update:
+
+- linear stiff terms → implicit,  
+- nonlinear terms → explicit,  
+- mobility operator → defines gradient-flow geometry.
+
+The network is penalized if its update deviates from this stable reference.
+
+---
+
+### 𝓛_energy — Energy Dissipation
+
+One-sided penalty enforcing:
+
+```
+E(u_hat^{n+1}) ≤ E(u^n)
+```
+
+ensuring thermodynamic consistency and physically admissible relaxation.
+
+---
+
+### 𝓛_anchor — Low-Frequency Spectral Anchoring
+
+Matches **low-wavenumber Fourier modes** of:
+
+- predicted field, and  
+- IMEX teacher step.
+
+This prevents long-wavelength drift and improves long-horizon stability.
+
+---
+
+## 3.3 Time-Dependent Weights
+
+Fixed:
+```
+w1 = 1e-3
+w4 = 0.3
+```
+
+Epoch-dependent weights:
+
+```
+w2(e) = 0.25 + 0.6 * (e / (E − 1))^2
+```
+
+```
+w3(e) =  0.32 − 0.12 * (e / (E − 1))
+```
+
+where **e** = current epoch, **E** = total epochs.
+
+- **Early training:** large w3 → stronger scheme consistency  
+- **Later training:** large w2 → stronger spectral anchoring
+
+---
 ## 4. Data Generation and Training Protocol
 
 ### 4.1 Data Generation
@@ -302,7 +361,18 @@ The 3D iso-surface evolution captures full volumetric coarsening behavior. PENCO
 
 ---
 
+## 📈 5.2 Aggregate In-Distribution Error Across All five PDEs
 
+To provide a unified comparison across all five phase-field systems, the figure below shows the **Relative L² error over time** for FNO-4D, MHNO, pure-physics training, and the two hybrid PENCO variants.  
+This summary highlights PENCO’s strong in-distribution performance, demonstrating:
+
+- lower error across the full rollout,
+- improved stability during early transient dynamics,
+- and significantly reduced long-horizon drift compared to purely data-driven operators.
+
+![](https://github.com/MBamdad/PENCO/blob/main/AC3D_Hybrid/hybrid_ac3d/In%20Distribution%20results.png)
+
+---
 ### 5.2 📘 Out-of-Distribution (OOD) Results
 
 To test robustness beyond GRF-based initial conditions, we evaluate on **deterministic geometries**:
@@ -312,7 +382,6 @@ To test robustness beyond GRF-based initial conditions, we evaluate on **determi
 - **MBE**: torus configuration
 
 These shapes differ significantly from training data in curvature, interface width, and topology, making them a stringent test of OOD generalization.
-
 
 **Summary of OOD behavior:**
 
@@ -338,7 +407,6 @@ A complete collection of all OOD evaluation plots (spherical, star-shaped, torus
 ![](https://github.com/MBamdad/PENCO/blob/main/AC3D_Hybrid/hybrid_ac3d/OOD_plots-1.png)
 
 ---
-
 ## 6. Key Takeaways
 
 Compared to FNO-4D and MHNO, PENCO demonstrates:
