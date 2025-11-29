@@ -27,6 +27,14 @@ def _k_spectrum(nx, ny, nz, dx, device, dtype=torch.float32):
 # ---- existing k-spectrum helper is already present ----
 # def _k_spectrum(...)
 
+import torch, math
+import torch.fft
+import torch.nn.functional as F
+import numpy as np
+import config
+
+
+
 def _fft_rk2(nx, ny, nz, dx, device, dtype=torch.float32):
     """Return k^2 (=(2π)^2 |k|^2) and a safe inverse (1/(k^2+ε0)) for H^{-1} norm."""
     k2 = _k_spectrum(nx, ny, nz, dx, device, dtype=dtype)  # (S,S,S)
@@ -143,7 +151,6 @@ def semi_implicit_step_sh(u_in, dt, dx, eps):
     up = tfft.ifftn(v_hat, dim=(1,2,3)).real
     return up.unsqueeze(-1)
 
-
 def _semi_implicit_step_sh(u_in, dt, dx, eps):
     """
     SH3D teacher step (matches MATLAB):
@@ -167,49 +174,110 @@ def _semi_implicit_step_sh(u_in, dt, dx, eps):
     u1     = torch.fft.ifftn(u1_hat, dim=(1,2,3)).real
     return u1.unsqueeze(-1).to(u_in.dtype)
 
-'''''
-def physics_guided_update_sh_optimal(u_in, y_pred, alpha_cap=1.0):
+
+###### CH
+
+def pde_rhs_CH(u, dx, eps2):
     """
-    SH3D ONLY.
-    Find alpha* that minimizes the semi-implicit teacher residual (in Fourier)
-    along the line: u_alpha = up + alpha (u_si - up), alpha in [0, alpha_cap].
-    Returns blended field with stop-on-mass (no mass constraint for SH).
+    Standard CH RHS (continuous PDE):
+    u_t = Δ μ,   μ = -eps2 Δ u + (u^3 - u)
     """
-    assert config.PROBLEM == 'SH3D'
-    dt, dx, eps = config.DT, config.DX, config.EPSILON_PARAM
+    lap_u = laplacian_fourier_3d_phys(u, dx)
+    mu    = -eps2 * lap_u + (u**3 - 1.0*u)
+    lap_mu = laplacian_fourier_3d_phys(mu, dx)
+    return lap_mu
 
-    u0  = u_in.squeeze(-1).float()
-    up  = y_pred.squeeze(-1).float()
-    usi = semi_implicit_step_sh(u_in, dt, dx, eps).squeeze(-1).float()
+#####
+def _get_k2_grid_cached(S, dx, device):
+    """
+    Cache |k|^2 grid per (S, dx, device) to avoid recomputing every batch.
+    """
+    key = (S, float(dx), str(device))
+    if not hasattr(_get_k2_grid_cached, "_cache"):
+        _get_k2_grid_cached._cache = {}
+    cache = _get_k2_grid_cached._cache
+    if key in cache:
+        return cache[key]
 
-    B, S, _, _ = up.shape
-    k2 = _k_spectrum(S, S, S, dx, up.device)
-    k4 = k2 * k2
+    import math, torch
+    k = 2.0 * math.pi * torch.fft.fftfreq(S, d=dx).to(device)  # (S,)
+    kx, ky, kz = torch.meshgrid(k, k, k, indexing='ij')
+    k2 = (kx**2 + ky**2 + kz**2)
+    cache[key] = k2
+    return k2
 
-    u0_hat  = torch.fft.fftn(u0, dim=(1,2,3))
-    up_hat  = torch.fft.fftn(up, dim=(1,2,3))
-    usi_hat = torch.fft.fftn(usi, dim=(1,2,3))
-    u3_hat  = torch.fft.fftn(u0**3, dim=(1,2,3))  # dataset-consistent: no dealias
+def _split_hist_coords(x):
+    """
+    Split x into (hist, coords) assuming the last 3 channels are coordinates
+    when present. Falls back to (x, None) if no coords.
+    x: (B, S, S, S, C)
+    """
+    C = x.shape[-1]
+    T_in = getattr(config, "T_IN_CHANNELS", 4)
+    if C >= T_in + 3:
+        hist   = x[..., :T_in]     # time/history channels
+        coords = x[..., T_in:]     # 3 coord channels
+    else:
+        hist, coords = x, None
+    return hist, coords
+import torch
+import torch.nn.functional as F
 
-    denom   = (1.0/dt) + (1.0 - eps) + k4
-    rhs_hat = (1.0/dt) * u0_hat - u3_hat + 2.0 * k2 * u0_hat
 
-    r0_hat = denom * up_hat  - rhs_hat           # residual at alpha=0
-    a_hat  = denom * (usi_hat - up_hat)          # direction
 
-    # weighted LS in Fourier (Parseval), same spirit as scheme_residual
-    w = 1.0 / (denom + 1e-12)                   # preconditioning to avoid high-k domination
-    def wdot(A, B):
-        return (w * (A.real*B.real + A.imag*B.imag)).sum(dim=(1,2,3))
+# ===== Swift–Hohenberg (SH3D) =====
 
-    with torch.no_grad():
-        c1 = wdot(r0_hat, a_hat)                                        # (B,)
-        c2 = (w * (a_hat.real**2 + a_hat.imag**2)).sum((1,2,3)) + 1e-24 # (B,)
-        alpha_star = (-c1 / c2).clamp(0.0, alpha_cap).view(B,1,1,1)
+def _r_sh():
+    # MATLAB step uses (1 - epsilon) in the implicit linear term → r = 1 - epsilon
+    return 1.0 - float(config.EPSILON_PARAM)
 
-    u_blend = up + alpha_star * (usi - up)
-    return u_blend.unsqueeze(-1).to(y_pred.dtype)
-'''
+def energy_density_SH(u, dx):
+    """
+    Lyapunov density for SH (gradient flow, unit mobility):
+      E(u) = ∫ [ 1/2 |(1 + ∇^2) u|^2  - (r/2) u^2  + (1/4) u^4 ] dx,
+    with r = 1 - EPSILON_PARAM.
+    """
+    r = _r_sh()
+    lap_u = laplacian_fourier_3d_phys(u, dx)
+    one_plus_lap_u = u + lap_u
+    term_lin = 0.5 * (one_plus_lap_u ** 2)
+    term_r   = -0.5 * r * (u ** 2)
+    term_nl  = 0.25 * (u ** 4)
+    return term_lin + term_r + term_nl
+
+
+def semi_implicit_step_sh(u_in, dt, dx, eps_param):
+    """
+    One semi-implicit SH step that matches the MATLAB generator:
+        s_hat = FFT(u/dt) - FFT(u^3) + 2 k^2 FFT(u)
+        v_hat = s_hat / (1/dt + (1 - epsilon) + k^4)
+    """
+    u0 = u_in.squeeze(-1).float()
+    B, S, _, _ = u0.shape
+
+    k = 2.0 * math.pi * torch.fft.fftfreq(S, d=dx).to(u0.device)
+    kx, ky, kz = torch.meshgrid(k, k, k, indexing='ij')
+    k2 = (kx**2 + ky**2 + kz**2)
+    k4 = k2**2
+
+    U0   = torch.fft.fftn(u0, dim=(1,2,3))
+    U3   = torch.fft.fftn(u0**3, dim=(1,2,3))
+    sHat = U0 / dt - U3 + 2.0 * k2 * U0
+    denom = (1.0/dt) + (1.0 - float(eps_param)) + k4
+    VHat  = sHat / (denom + 1e-12)
+
+    u1 = torch.fft.ifftn(VHat, dim=(1,2,3)).real
+    return u1.unsqueeze(-1).to(u_in.dtype)
+
+#####################################
+
+@torch.no_grad()
+def _fft_freqs(S, dx, device):
+    k = 2*math.pi*torch.fft.fftfreq(S, d=dx).to(device)  # physical wavenumbers
+    kx, ky, kz = torch.meshgrid(k, k, k, indexing='ij')
+    k2 = kx*kx + ky*ky + kz*kz
+    return k2  # (S,S,S)
+
 
 def low_k_mse(u_pred, u_ref, frac=0.45):
     """
@@ -337,7 +405,6 @@ def grad_fourier(u, dx):
     uy = torch.fft.ifftn(i * ky * uhat, dim=[1,2,3]).real
     uz = torch.fft.ifftn(i * kz * uhat, dim=[1,2,3]).real
     return ux.to(u.dtype), uy.to(u.dtype), uz.to(u.dtype)
-
 def div_fourier(vx, vy, vz, dx):
     """
     Spectral divergence of vector field v = (vx, vy, vz)
@@ -364,12 +431,11 @@ def dealias_two_thirds(u):
 
 # -------------------------
 # RHS dispatch per PROBLEM
-# -------------------------
+
 def _rhs_ac3d(u, dx, eps2):
-    # Δu - (u^3 - u)/eps^2
+    # Dataset-consistent: NO dealiasing in the cubic (matches MATLAB generator)
     lap_u = laplacian_fourier_3d_phys(u, dx)
-    u_nl = dealias_two_thirds(u)
-    return lap_u - (1.0/eps2) * (u_nl**3 - u_nl)
+    return lap_u - (1.0/eps2) * (u**3 - u)
 
 
 def _rhs_mbe3d(u, dx, eps):
@@ -883,65 +949,8 @@ import config
 import torch, math
 import torch.nn.functional as F
 
-def physics_guided_update_sh_optimal(u_in, y_pred, alpha_cap=0.7, low_k_snap_frac=0.48):
-    """
-    SH3D ONLY. Blend y_pred toward the semi-implicit teacher usi with optimal alpha*
-    that MINIMIZES the semi-implicit residual (preconditioned). If the best alpha*
-    would increase residual, do nothing (alpha=0).
-    """
-    assert config.PROBLEM == 'SH3D'
-    dt, dx, eps = config.DT, config.DX, config.EPSILON_PARAM
 
-    u0  = u_in.squeeze(-1).float()
-    up  = y_pred.squeeze(-1).float()
-    usi = semi_implicit_step_sh(u_in, dt, dx, eps).squeeze(-1).float()
-
-    B, S, _, _ = up.shape
-    device = up.device
-    k2 = _k_spectrum(S, S, S, dx, device); k4 = k2 * k2
-    denom = (1.0 / dt) + (1.0 - eps) + k4
-
-    u0_hat  = torch.fft.fftn(u0, dim=(1,2,3))
-    up_hat  = torch.fft.fftn(up, dim=(1,2,3))
-    usi_hat = torch.fft.fftn(usi, dim=(1,2,3))
-    u3_hat  = torch.fft.fftn(u0**3, dim=(1,2,3))
-    rhs_hat = (1.0 / dt) * u0_hat - u3_hat + 2.0 * k2 * u0_hat
-
-    # light low-k snap (improves coherence of large scales)
-    fx = torch.fft.fftfreq(S, d=1.0).to(device)
-    FY, FX, FZ = torch.meshgrid(fx, fx, fx, indexing='ij')
-    r = torch.sqrt(FX*FX + FY*FY + FZ*FZ)
-    mask_low = (r <= low_k_snap_frac * r.max()).to(up_hat.dtype)
-    up_hat = mask_low * usi_hat + (1.0 - mask_low) * up_hat
-
-    r0_hat = denom * up_hat - rhs_hat              # residual at alpha=0
-    a_hat  = denom * (usi_hat - up_hat)            # descent direction toward usi
-    w = 1.0 / (denom + 1e-12)                      # whitening
-
-    def wdot(A, B):
-        return (w * (A.real*B.real + A.imag*B.imag)).sum(dim=(1,2,3))
-
-    with torch.no_grad():
-        c1 = wdot(r0_hat, a_hat)                                     # (B,)
-        c2 = (w * (a_hat.real**2 + a_hat.imag**2)).sum((1,2,3)) + 1e-24
-        alpha_star = (-c1 / c2).clamp(0.0, alpha_cap).view(B,1,1,1)
-
-        # MONOTONE SAFETY: ensure residual does not increase
-        up_blend_hat = up_hat + alpha_star * (usi_hat - up_hat)
-        r_star_hat   = denom * up_blend_hat - rhs_hat
-        # If ⟨r*, r*⟩_w > ⟨r0, r0⟩_w, set alpha to 0
-        r0_w = (w * (r0_hat.real**2 + r0_hat.imag**2)).sum((1,2,3))
-        rs_w = (w * (r_star_hat.real**2 + r_star_hat.imag**2)).sum((1,2,3))
-        bad = (rs_w > r0_w).view(B,1,1,1)
-        alpha_star = torch.where(bad, torch.zeros_like(alpha_star), alpha_star)
-
-    y_blend = up + alpha_star * (usi - up)
-    return y_blend.unsqueeze(-1).to(y_pred.dtype)
-
-
-#################
-
-
+#############
 def physics_collocation_tau_L2_PFC(u_in, u_pred, tau=0.5 - 1.0/(2.0*math.sqrt(5.0)),
                                    normalize=True):
     """
@@ -966,57 +975,6 @@ def physics_collocation_tau_L2_PFC(u_in, u_pred, tau=0.5 - 1.0/(2.0*math.sqrt(5.
     return (R**2).mean().to(u_pred.dtype)
 
 
-def physics_guided_update_pfc_optimal(u_in, y_pred, alpha_cap=0.6, low_k_snap_frac=0.45):
-    """
-    PFC3D ONLY. Blend y_pred toward the semi-implicit teacher (PFC) with
-    optimal alpha* (Fourier-preconditioned LS on the semi-implicit residual),
-    including a light low-k spectral snap to the teacher.
-    """
-    assert config.PROBLEM == 'PFC3D'
-    dt, dx, eps = config.DT, config.DX, config.EPSILON_PARAM
-    u0  = u_in.squeeze(-1).float()
-    up  = y_pred.squeeze(-1).float()
-    usi = semi_implicit_step_pfc(u_in, dt, dx, eps).squeeze(-1).float()
-
-    B, S, _, _ = up.shape
-    k2 = _k_spectrum(S, S, S, dx, up.device)
-    denom = (1.0/dt) + (1.0 - eps)*k2 + (k2**3)
-
-    U0   = torch.fft.fftn(u0, dim=(1,2,3))
-    UP   = torch.fft.fftn(up, dim=(1,2,3))
-    USI  = torch.fft.fftn(usi, dim=(1,2,3))
-    U3   = torch.fft.fftn(u0**3, dim=(1,2,3))  # dataset-consistent
-
-    rhs  = (1.0/dt)*U0 - k2*U3 + 2.0*(k2**2)*U0
-
-    # light low-k snap
-    fx = torch.fft.fftfreq(S, d=1.0).to(up.device)
-    FX, FY, FZ = torch.meshgrid(fx, fx, fx, indexing='ij')
-    r = torch.sqrt(FX*FX + FY*FY + FZ*FZ)
-    mask_low = (r <= low_k_snap_frac * r.max()).to(UP.dtype)
-    UP = mask_low * USI + (1.0 - mask_low) * UP
-
-    r0 = denom * UP  - rhs
-    a  = denom * (USI - UP)
-    w  = 1.0 / (denom + 1e-12)
-
-    def wdot(A, B): return (w * (A.real*B.real + A.imag*B.imag)).sum(dim=(1,2,3))
-
-    with torch.no_grad():
-        c1 = wdot(r0, a)
-        c2 = (w * (a.real**2 + a.imag**2)).sum((1,2,3)) + 1e-24
-        alpha = (-c1 / c2).clamp(0.0, alpha_cap).view(B,1,1,1)
-
-        # monotone safety
-        UP_star = UP + alpha * (USI - UP)
-        rs = denom * UP_star - rhs
-        r0_w = (w * (r0.real**2 + r0.imag**2)).sum((1,2,3))
-        rs_w = (w * (rs.real**2 + rs.imag**2)).sum((1,2,3))
-        alpha = torch.where((rs_w > r0_w).view(B,1,1,1),
-                            torch.zeros_like(alpha), alpha)
-
-    y_blend = up + alpha * (usi - up)
-    return y_blend.unsqueeze(-1).to(y_pred.dtype)
 
 
 def pfc_free_energy_density(u, dx, eps):
@@ -1056,58 +1014,7 @@ def _k_axes_phys(S, dx, device, dtype):
     kv = torch.cat([torch.arange(0, half + 1, device=device),
                     torch.arange(-half + 1, 0, device=device)], dim=0).to(dtype)
     return (2.0 * _math.pi / L) * kv  # (S,)
-'''''
-def semi_implicit_step_mbe(u_in, dt, dx, eps):
-    """
-    One MBE3D semi-implicit step (matches the MATLAB generator):
 
-      ŝ = FFT(u/dt) + [ p * FFT(f1) + q * FFT(f2) + r * FFT(f3) ]
-      v̂ = ŝ / [ 1/dt - (k^2) + eps * (k^2)^2 ]
-      u^{n+1} = IFFT(v̂)
-
-    where p,q,r = i*2π/L * k components,
-          fx = ∂_x u, etc,  f1 = (|∇u|^2) * fx, etc.
-    Inputs:  u_in (B,S,S,S,1), dt, dx, eps
-    Returns: (B,S,S,S,1)
-    """
-    u = u_in.squeeze(-1).float()              # (B,S,S,S)
-    B, Sx, Sy, Sz = u.shape
-    device, dtype = u.device, u.dtype
-
-    # spectral axes (i*2π/L * k) as in MATLAB code
-    kx = _k_axes_phys(Sx, dx, device, dtype)
-    ky = _k_axes_phys(Sy, dx, device, dtype)
-    kz = _k_axes_phys(Sz, dx, device, dtype)
-    px, qy, rz = 1j * kx, 1j * ky, 1j * kz
-
-    # grids
-    PX, QY, RZ = torch.meshgrid(px, qy, rz, indexing='ij')
-    K2 = (PX/(1j))**2 + (QY/(1j))**2 + (RZ/(1j))**2   # (2π/L)^2 |k|^2, real >=0
-
-    U = torch.fft.fftn(u, dim=(1,2,3))
-
-    # gradients in real space via spectral
-    fx = torch.fft.ifftn(PX * U, dim=(1,2,3)).real
-    fy = torch.fft.ifftn(QY * U, dim=(1,2,3)).real
-    fz = torch.fft.ifftn(RZ * U, dim=(1,2,3)).real
-    s2 = fx*fx + fy*fy + fz*fz
-
-    f1 = s2 * fx
-    f2 = s2 * fy
-    f3 = s2 * fz
-
-    # divergence in Fourier: i k·FFT(f)  (here already have p/q/r = i*2π/L * k)
-    div_hat = PX * torch.fft.fftn(f1, dim=(1,2,3)) \
-            + QY * torch.fft.fftn(f2, dim=(1,2,3)) \
-            + RZ * torch.fft.fftn(f3, dim=(1,2,3))
-
-    s_hat = torch.fft.fftn(u / dt, dim=(1,2,3)) + div_hat
-    denom = (1.0 / dt) - K2 + (float(eps)) * (K2 ** 2)    # 1/dt - k^2 + eps k^4
-
-    v_hat = s_hat / (denom + 1e-12)
-    up = torch.fft.ifftn(v_hat, dim=(1,2,3)).real
-    return up.unsqueeze(-1).to(u_in.dtype)
-'''
 
 
 # --- at top of functions.py (near imports) ---
@@ -1249,159 +1156,7 @@ def energy_penalty_mbe(u_in, u_pred, dx, eps):
     F0 = mbe_free_energy_density(u0, dx, eps).mean(dim=(1,2,3))
     Fp = mbe_free_energy_density(up, dx, eps).mean(dim=(1,2,3))
     return torch.relu(Fp - F0).mean()
-# =============================================================================
-
-def physics_guided_update_mbe_optimal(u_in, y_pred, alpha_cap=0.6, low_k_snap_frac=0.45):
-    """
-    MBE3D ONLY. Blend y_pred toward the semi-implicit MBE teacher with optimal alpha*.
-    Matches your MATLAB step:
-        (1/dt - k^2 + eps k^4) û^{n+1} = (1/dt) û^n + FFT(div(|∇u^n|^2 ∇u^n))
-    We minimize the preconditioned semi-implicit residual in Fourier, with:
-      • light low-k snap to the teacher
-      • weighted LS alpha* in [0, alpha_cap]
-      • monotone safety (don’t increase residual)
-    """
-    assert config.PROBLEM == 'MBE3D'
-    dt, dx, eps = config.DT, config.DX, config.EPSILON_PARAM
-
-    # real-space fields
-    u0  = u_in.squeeze(-1).float()   # (B,S,S,S)
-    up  = y_pred.squeeze(-1).float()
-
-    # teacher step (your MBE semi-implicit)
-    usi = semi_implicit_step_mbe(u_in, dt, dx, eps).squeeze(-1).float()
-
-    B, S, _, _ = up.shape
-    device = up.device
-
-    # k^2 spectrum and operator denominator
-    k2 = _k_spectrum(S, S, S, dx, device)       # (2π/L)^2 |k|^2  >= 0
-    denom = (1.0/dt) - k2 + eps * (k2**2)       # matches MATLAB denom: 1/dt - k^2 + eps k^4
-
-    # ----- RHS(u^n) in real space: (1/dt) u^n + div(|∇u^n|^2 ∇u^n) -----
-    ux, uy, uz = grad_fourier(u0, dx)
-    s = ux*ux + uy*uy + uz*uz
-    f1, f2, f3 = s*ux, s*uy, s*uz
-    div_term = div_fourier(f1, f2, f3, dx)
-    rhs = (1.0/dt) * u0 + div_term
-
-    # FFTs
-    U0   = torch.fft.fftn(u0,  dim=(1,2,3))
-    UP   = torch.fft.fftn(up,  dim=(1,2,3))
-    USI  = torch.fft.fftn(usi, dim=(1,2,3))
-    RHS  = torch.fft.fftn(rhs, dim=(1,2,3))
-
-    # ----- light low-k snap to teacher (improves large-scale coherence) -----
-    fx = torch.fft.fftfreq(S, d=1.0).to(device)
-    FX, FY, FZ = torch.meshgrid(fx, fx, fx, indexing='ij')
-    r = torch.sqrt(FX*FX + FY*FY + FZ*FZ)
-    mask_low = (r <= low_k_snap_frac * r.max()).to(UP.dtype)
-    UP = mask_low * USI + (1.0 - mask_low) * UP
-
-    # ----- preconditioned semi-implicit residual (Parseval) -----
-    r0 = denom * UP  - RHS                  # residual at alpha=0
-    a  = denom * (USI - UP)                 # descent direction toward teacher
-    w  = 1.0 / (denom + 1e-12)              # whitening to avoid high-k domination
-
-    def wdot(A, B):
-        return (w * (A.real*B.real + A.imag*B.imag)).sum(dim=(1,2,3))
-
-    with torch.no_grad():
-        c1 = wdot(r0, a)                                              # (B,)
-        c2 = (w * (a.real**2 + a.imag**2)).sum((1,2,3)) + 1e-24       # (B,)
-        alpha = (-c1 / c2).clamp(0.0, alpha_cap).view(B,1,1,1)
-
-        # monotone safety: ensure residual doesn’t increase
-        UP_star = UP + alpha * (USI - UP)
-        rs = denom * UP_star - RHS
-        r0_w = (w * (r0.real**2 + r0.imag**2)).sum((1,2,3))
-        rs_w = (w * (rs.real**2 + rs.imag**2)).sum((1,2,3))
-        alpha = torch.where((rs_w > r0_w).view(B,1,1,1),
-                            torch.zeros_like(alpha), alpha)
-
-    # blend back in real space
-    y_blend = up + alpha * (usi - up)
-    return y_blend.unsqueeze(-1).to(y_pred.dtype)
-
-
-def physics_collocation_tau_Hm1_MBE(u_in, u_pred, tau=0.5 - 1.0/(2.0*_math.sqrt(5.0)),
-                                    normalize=True):
-    """
-    MBE collocation scored in H^{-1} to emphasize conserved, low-k dynamics:
-      R_tau = (u^{n+1}-u^n)/dt - [Δu_tau - eps ∇^4 u_tau + ∇·(|∇u_tau|^2 ∇u_tau)].
-    """
-    assert config.PROBLEM == 'MBE3D'
-    dt, dx, eps = config.DT, config.DX, config.EPSILON_PARAM
-    u0 = u_in.squeeze(-1).float()
-    up = u_pred.squeeze(-1).float()
-
-    ut = (up - u0) / dt
-    u_tau = (1.0 - tau) * u0 + tau * up
-
-    ux, uy, uz = grad_fourier(u_tau, dx)
-    s2 = ux*ux + uy*uy + uz*uz
-    vx, vy, vz = s2*ux, s2*uy, s2*uz
-    div_term   = div_fourier(vx, vy, vz, dx)
-    lap_u      = laplacian_fourier_3d_phys(u_tau, dx)
-    bi_u       = biharmonic(u_tau, dx)
-
-    rhs_tau = lap_u - eps * bi_u + div_term
-
-    if normalize:
-        s_t = ut.pow(2).mean((1,2,3), keepdim=True).sqrt().detach() + 1e-8
-        s_r = rhs_tau.pow(2).mean((1,2,3), keepdim=True).sqrt().detach() + 1e-8
-        R = ut / s_t - rhs_tau / s_r
-    else:
-        R = ut - rhs_tau
-
-    # H^{-1} metric
-    B, S, _, _ = R.shape
-    k2, inv_k2 = _fft_rk2(S, S, S, dx, R.device, dtype=torch.float32)
-    R_hat = torch.fft.fftn(R.float(), dim=(1,2,3))
-    r2 = (R_hat.real**2 + R_hat.imag**2) * inv_k2
-    return torch.sqrt(r2 + 1e-8).mean().to(u_pred.dtype)
-
-###################
-# CH
-
-# === ADD: CH3D RHS (dataset-consistent split) ================================
-''''
-def _rhs_ch3d(u, dx, eps):
-    """
-    CH3D gradient flow used in your MATLAB generator:
-        u_t = - 2 Δu  -  ε^2 Δ^2 u  -  Δ (u^3 - 3u)
-    Notes:
-      • linear terms 2Δu + ε^2 Δ^2 u are the part you treated implicitly,
-      • the cubic is explicit as Δ(u^3 - 3u),
-      • 'eps' here is config.EPSILON_PARAM (ε), so we square it where needed.
-    """
-    lap_u   = laplacian_fourier_3d_phys(u, dx)      # Δu
-    bi_u    = biharmonic(u, dx)                     # Δ^2 u
-    chem    = u**3 - 3.0*u                          # f'(u) used by MATLAB
-    lap_chem = laplacian_fourier_3d_phys(chem, dx)  # Δ f'(u)
-    return -2.0 * lap_u - (eps**2) * bi_u - lap_chem
-# ============================================================================
-'''
-# = ADD: CH3D semi-implicit teacher step (matches MATLAB exactly) ==========
-'''''
-def semi_implicit_step_ch(u_in, dt, dx, eps):
-    """
-    (1 + dt*(2k^2 + ε^2 k^4)) û^{n+1} = û^n - dt * k^2 * FFT( (u^n)^3 - 3 u^n )
-    Returns real (B,S,S,S,1).
-    """
-    u0 = u_in.squeeze(-1).float()
-    B, S, _, _ = u0.shape
-    k2 = _k_spectrum(S, S, S, dx, u0.device)      # (2π/L)^2 |k|^2
-    chem0_hat = torch.fft.fftn(u0**3 - 3.0*u0, dim=(1,2,3))
-    U0        = torch.fft.fftn(u0, dim=(1,2,3))
-
-    denom = 1.0 + dt * (2.0 * k2 + (eps**2) * (k2**2))
-    numer = U0 - dt * k2 * chem0_hat
-    U1 = numer / (denom + 1e-12)
-    u1 = torch.fft.ifftn(U1, dim=(1,2,3)).real
-    return u1.unsqueeze(-1).to(u_in.dtype)
-'''''
-
+# ==================
 
 def semi_implicit_step_ch(u_in, dt, dx, eps):
     """
@@ -1423,37 +1178,6 @@ def semi_implicit_step_ch(u_in, dt, dx, eps):
     u1 = torch.fft.ifftn(U1, dim=(1, 2, 3)).real
     return u1.unsqueeze(-1).to(u_in.dtype)
 
-
-def scheme_residual_fourier_ch(u_in, u_pred):
-    """
-    CORRECTED CH3D scheme residual to match MATLAB
-    """
-    dt, dx, eps = config.DT, config.DX, config.EPSILON_PARAM
-    u0 = u_in.squeeze(-1).float()
-    up = u_pred.squeeze(-1).float()
-
-    B, S, _, _ = u0.shape
-    k2 = _k_spectrum(S, S, S, dx, u0.device)
-
-    U0 = torch.fft.fftn(u0, dim=(1, 2, 3))
-    UP = torch.fft.fftn(up, dim=(1, 2, 3))
-    chem0_hat = torch.fft.fftn(u0 ** 3 - 3.0 * u0, dim=(1, 2, 3))
-
-    denom = 1.0 + dt * (2.0 * k2 + (eps ** 2) * (k2 ** 2))
-    rhs = U0 - dt * k2 * chem0_hat
-
-    rhat = denom * UP - rhs
-
-    # Ignore k=0 for mass conservation (MATLAB does this implicitly)
-    rhat = rhat * (k2 > 0)
-
-    # Precondition
-    rhat = rhat / (denom + 1e-12)
-
-    r2 = rhat.real ** 2 + rhat.imag ** 2
-    return r2.mean()
-
-
 def _rhs_ch3d(u, dx, eps):
     """
     CORRECTED CH3D RHS to match MATLAB generator:
@@ -1466,46 +1190,7 @@ def _rhs_ch3d(u, dx, eps):
 
     # The RHS is -Δ of everything
     return -laplacian_fourier_3d_phys(2.0 * u + (eps ** 2) * lap_u + chem, dx)
-# ============================================================================
 
-
-# === ADD: CH3D H^{-1} Gauss–Lobatto collocation residual ====================
-import math as _m
-
-def physics_collocation_tau_Hm1_CH(u_in, u_pred,
-                                   tau=0.5 - 1.0/(2.0*_m.sqrt(5.0)),
-                                   normalize=True):
-    """
-    CH3D collocation at u_tau, scored in H^{-1}:
-      R_tau = (u^{n+1}-u^n)/dt - RHS_CH(u_tau)
-    with optional per-sample normalization to balance ut vs RHS.
-    """
-    assert config.PROBLEM == 'CH3D'
-    dt, dx, eps = config.DT, config.DX, config.EPSILON_PARAM
-
-    u0 = u_in.squeeze(-1).float()
-    up = u_pred.squeeze(-1).float()
-    ut = (up - u0) / dt
-    u_tau = (1.0 - tau) * u0 + tau * up
-
-    rhs_tau = _rhs_ch3d(u_tau, dx, eps)
-
-    if normalize:
-        s_t = ut.pow(2).mean((1,2,3), keepdim=True).sqrt().detach() + 1e-8
-        s_r = rhs_tau.pow(2).mean((1,2,3), keepdim=True).sqrt().detach() + 1e-8
-        R = ut / s_t - rhs_tau / s_r
-    else:
-        R = ut - rhs_tau
-
-    # H^{-1} metric (weight low-k, conserve mass dynamics)
-    B, S, _, _ = R.shape
-    k2, inv_k2 = _fft_rk2(S, S, S, dx, R.device, dtype=torch.float32)
-    R_hat = torch.fft.fftn(R.float(), dim=(1,2,3))
-    r2 = (R_hat.real**2 + R_hat.imag**2) * inv_k2
-    return torch.sqrt(r2 + 1e-8).mean().to(u_pred.dtype)
-# ============================================================================
-
-# === NEW: CH3D Gauss–Lobatto collocation scored in L2 (identical form to SH/PFC/MBE) ===
 import math as _m
 
 def physics_collocation_tau_L2_CH(u_in, u_pred,
@@ -1535,230 +1220,3 @@ def physics_collocation_tau_L2_CH(u_in, u_pred,
 
     return (R**2).mean().to(u_pred.dtype)
 
-
-def physics_guided_update_ch_optimal(u_in, y_pred, alpha_cap=0.6, low_k_snap_frac=0.45):
-    """
-    CH3D ONLY. Blend y_pred toward the CH semi-implicit teacher with optimal alpha*.
-    We minimize the preconditioned semi-implicit residual in Fourier:
-
-      (1 + dt*(2k^2 + eps^2 k^4)) û^{n+1} = û^n - dt * k^2 * FFT( (u^n)^3 - 3u^n )
-
-    With:
-      • light low-k snap to the teacher (improves large-scale coherence)
-      • weighted LS alpha* in [0, alpha_cap]
-      • monotone safety (don’t increase residual)
-    """
-    assert config.PROBLEM == 'CH3D'
-    dt, dx, eps = config.DT, config.DX, config.EPSILON_PARAM
-
-    u0  = u_in.squeeze(-1).float()        # (B,S,S,S)
-    up  = y_pred.squeeze(-1).float()
-    usi = semi_implicit_step_ch(u_in, dt, dx, eps).squeeze(-1).float()
-
-    B, S, _, _ = up.shape
-    device = up.device
-    k2 = _k_spectrum(S, S, S, dx, device)           # (2π/L)^2 |k|^2 >= 0
-    k4 = k2 * k2
-
-    U0   = torch.fft.fftn(u0,  dim=(1,2,3))
-    UP   = torch.fft.fftn(up,  dim=(1,2,3))
-    USI  = torch.fft.fftn(usi, dim=(1,2,3))
-    CHEM0= torch.fft.fftn(u0**3 - 3.0*u0, dim=(1,2,3))
-
-    denom = 1.0 + dt * (2.0 * k2 + (eps**2) * k4)
-    rhs   = U0 - dt * k2 * CHEM0
-
-    # ----- light low-k snap -----
-    fx = torch.fft.fftfreq(S, d=1.0).to(device)
-    FX, FY, FZ = torch.meshgrid(fx, fx, fx, indexing='ij')
-    r = torch.sqrt(FX*FX + FY*FY + FZ*FZ)
-    mask_low = (r <= low_k_snap_frac * r.max()).to(UP.dtype)
-    UP = mask_low * USI + (1.0 - mask_low) * UP
-
-    # ----- preconditioned residual -----
-    r0 = denom * UP  - rhs                 # residual at alpha=0
-    a  = denom * (USI - UP)                # descent direction toward teacher
-    w  = 1.0 / (denom + 1e-12)             # whitening
-
-    def wdot(A, B): return (w * (A.real*B.real + A.imag*B.imag)).sum(dim=(1,2,3))
-
-    with torch.no_grad():
-        c1 = wdot(r0, a)
-        c2 = (w * (a.real**2 + a.imag**2)).sum((1,2,3)) + 1e-24
-        alpha = (-c1 / c2).clamp(0.0, alpha_cap).view(B,1,1,1)
-
-        # monotone safety
-        UP_star = UP + alpha * (USI - UP)
-        rs = denom * UP_star - rhs
-        r0_w = (w * (r0.real**2 + r0.imag**2)).sum((1,2,3))
-        rs_w = (w * (rs.real**2 + rs.imag**2)).sum((1,2,3))
-        alpha = torch.where((rs_w > r0_w).view(B,1,1,1),
-                            torch.zeros_like(alpha), alpha)
-
-    y_blend = up + alpha * (usi - up)
-    # exact mass conservation afterwards (CH invariant)
-    y_blend = mass_project_pred(y_blend.unsqueeze(-1), u_in).squeeze(-1)
-    return y_blend.unsqueeze(-1).to(y_pred.dtype)
-
-
-def physics_collocation_tau_Hm1_CH_direct(u_in, u_pred, tau=0.5 - 1.0/(2.0*math.sqrt(5.0)),
-                                          normalize=True, use_interface_weight=True):
-    """
-    CH3D: R_tau = (u^{n+1}-u^n)/dt - [Δ(u_tau^3-3u_tau) - eps^2 ∇^4 u_tau],
-    with u_tau = (1-τ)u^n + τ u^{n+1}. Score in H^{-1}.
-    - No de-aliasing (matches dataset).
-    - Per-batch normalization balances ut vs RHS.
-    - Optional soft interface weighting.
-    """
-    assert config.PROBLEM == 'CH3D'
-    dt, dx, eps = config.DT, config.DX, config.EPSILON_PARAM
-
-    u0 = u_in.squeeze(-1).float()
-    up = u_pred.squeeze(-1).float()
-    ut = (up - u0) / dt
-
-    um = (1.0 - tau) * u0 + tau * up
-    rhs_tau = laplacian_fourier_3d_phys(um**3 - 3.0*um, dx) - (eps**2) * biharmonic(um, dx)
-
-    if normalize:
-        s_t = ut.pow(2).mean(dim=(1,2,3), keepdim=True).sqrt().detach() + 1e-8
-        s_r = rhs_tau.pow(2).mean(dim=(1,2,3), keepdim=True).sqrt().detach() + 1e-8
-        R = ut / s_t - rhs_tau / s_r
-    else:
-        R = ut - rhs_tau
-
-    if use_interface_weight:
-        w = interface_weight(um, dx)  # already defined in your file
-        R = R * w
-
-    return _hm1_mean(R, dx)  # uses your existing _fft_rk2-based helper
-
-def physics_residual_midpoint_normalized_ch_direct(u_in, u_pred):
-    """
-    CH midpoint residual with per-batch normalization in an H^{-1} metric,
-    using the DIRECT PDE (no μ):
-        R_m = (u^{n+1}-u^n)/dt - [Δ(u_m^3-3u_m) - eps^2 ∇^4 u_m],  u_m=(u^n+u^{n+1})/2
-    """
-    dt, dx, eps = config.DT, config.DX, config.EPSILON_PARAM
-    u0 = u_in.squeeze(-1).float()
-    up = u_pred.squeeze(-1).float()
-    um = 0.5 * (u0 + up)
-
-    ut    = (up - u0) / dt
-    rhs_m = laplacian_fourier_3d_phys(um**3 - 3.0*um, dx) - (eps**2) * biharmonic(um, dx)
-
-    # per-sample normalization (balances ut vs RHS)
-    s_t  = ut.pow(2).mean(dim=(1,2,3), keepdim=True).sqrt().detach() + 1e-8
-    s_r  = rhs_m.pow(2).mean(dim=(1,2,3), keepdim=True).sqrt().detach() + 1e-8
-    Rm = ut / s_t - rhs_m / s_r
-
-    # H^{-1} metric: ||R||_{H^{-1}}^2 ≈ Σ |R̂|^2 / (k^2 + ε0)
-    B, S, _, _ = Rm.shape
-    k2, inv_k2 = _fft_rk2(S, S, S, dx, Rm.device, dtype=torch.float32)
-    Rm_hat = torch.fft.fftn(Rm, dim=(1,2,3))
-    r2 = (Rm_hat.real**2 + Rm_hat.imag**2) * inv_k2
-    return torch.sqrt(r2 + 1e-8).mean().to(u_pred.dtype)
-
-# --- CH projection with mixed chemistry (uses the same MATLAB-matched kernel) ---
-def si_projection_ch_mixed(u_in, u_pred, dt, dx, eps, tau=0.5):
-    """
-    Semi-implicit projection using mixed chemistry:
-      u_m = (1-τ) u^n + τ u^{n+1}_pred
-      û^{n+1}_proj = [ û^n - dt * k^2 * FFT( u_m^3 - 3 u_m ) ] / [ 1 + dt (2 k^2 + eps^2 k^4) ]
-    Computed in float64 with MATLAB k-grid; no dealiasing (to match dataset).
-    """
-    assert config.PROBLEM == 'CH3D'
-    u0 = u_in.squeeze(-1).to(torch.float64)
-    up = u_pred.squeeze(-1).to(torch.float64)
-    um = (1.0 - tau) * u0 + tau * up
-
-    B, S, _, _ = u0.shape
-    k2, k4 = _kgrid(S, dx, u0.device)
-    k2 = k2.to(torch.float64); k4 = k4.to(torch.float64)
-
-    u0_hat   = torch.fft.fftn(u0, dim=(1,2,3))
-    chem_hat = torch.fft.fftn(um*um*um - 3.0*um, dim=(1,2,3))
-
-    denom  = 1.0 + dt * (2.0 * k2 + (eps * eps) * k4)
-    up_hat = (u0_hat - dt * k2 * chem_hat) / denom
-
-    u_proj = torch.fft.ifftn(up_hat, dim=(1,2,3)).real
-    return u_proj.unsqueeze(-1).to(u_pred.dtype)
-
-
-def physics_guided_update_ch(u_in, y_pred, alpha=0.35, tau=0.5):
-    """
-    Blend the semi-implicit projection back into the prediction:
-      y_phys = y_pred + alpha * (u_proj - y_pred)
-    then mass-project to enforce CH conservation.
-    """
-    u_proj = si_projection_ch_mixed(u_in, y_pred, config.DT, config.DX, config.EPSILON_PARAM, tau=tau)
-    y_phys = y_pred + alpha * (u_proj - y_pred)
-    y_phys = mass_project_pred(y_phys, u_in)  # keep total mass exactly
-    return y_phys
-
-
-#################
-
-#### AC3D
-
-# ==== AC3D: Optimal Physics-Guided Update (semi-implicit residual LS) ====
-def physics_guided_update_ac_optimal(u_in, y_pred, alpha_cap=0.6, low_k_snap_frac=0.45):
-    """
-    AC3D ONLY. Blend y_pred toward the AC semi-implicit teacher with optimal alpha*.
-    Teacher (your AC semi-implicit step):
-        û^{n+1} = [ û^n - (dt/eps^2) FFT(u^3 - u) ] / [ 1 + dt * k^2 ]
-    We minimize the preconditioned semi-implicit residual in Fourier:
-        R̂ = (1 + dt k^2) Û^{n+1} - [ Û^n - (dt/eps^2) FFT(u^3 - u) ]
-    with:
-      • light low-k spectral snap to teacher
-      • weighted LS alpha* in [0, alpha_cap]
-      • monotone safety (don’t increase residual)
-    """
-    assert config.PROBLEM == 'AC3D'
-    dt, dx, eps2 = config.DT, config.DX, config.EPS2
-
-    u0  = u_in.squeeze(-1).float()                 # (B,S,S,S)
-    up  = y_pred.squeeze(-1).float()
-    usi = semi_implicit_step(u_in, dt, dx, eps2).squeeze(-1).float()  # AC branch inside
-
-    B, S, _, _ = up.shape
-    device = up.device
-
-    k2 = _k_spectrum(S, S, S, dx, device)         # (2π/L)^2 |k|^2 >= 0
-    denom = 1.0 + dt * k2
-
-    U0   = torch.fft.fftn(u0, dim=(1,2,3))
-    UP   = torch.fft.fftn(up, dim=(1,2,3))
-    USI  = torch.fft.fftn(usi, dim=(1,2,3))
-    NL   = torch.fft.fftn(u0**3 - u0, dim=(1,2,3))  # dataset-consistent (no dealias for AC data)
-    RHS  = U0 - (dt/eps2) * NL
-
-    # light low-k snap to teacher
-    fx = torch.fft.fftfreq(S, d=1.0).to(device)
-    FX, FY, FZ = torch.meshgrid(fx, fx, fx, indexing='ij')
-    r = torch.sqrt(FX*FX + FY*FY + FZ*FZ)
-    mask_low = (r <= low_k_snap_frac * r.max()).to(UP.dtype)
-    UP = mask_low * USI + (1.0 - mask_low) * UP
-
-    # preconditioned residual
-    r0 = denom * UP  - RHS                    # residual at alpha=0
-    a  = denom * (USI - UP)                   # descent direction
-    w  = 1.0 / (denom + 1e-12)                # whitening
-
-    def wdot(A, B): return (w * (A.real*B.real + A.imag*B.imag)).sum(dim=(1,2,3))
-
-    with torch.no_grad():
-        c1 = wdot(r0, a)
-        c2 = (w * (a.real**2 + a.imag**2)).sum((1,2,3)) + 1e-24
-        alpha = (-c1 / c2).clamp(0.0, alpha_cap).view(B,1,1,1)
-
-        # monotone safety
-        UP_star = UP + alpha * (USI - UP)
-        rs = denom * UP_star - RHS
-        r0_w = (w * (r0.real**2 + r0.imag**2)).sum((1,2,3))
-        rs_w = (w * (rs.real**2 + rs.imag**2)).sum((1,2,3))
-        alpha = torch.where((rs_w > r0_w).view(B,1,1,1), torch.zeros_like(alpha), alpha)
-
-    y_blend = up + alpha * (usi - up)
-    return y_blend.unsqueeze(-1).to(y_pred.dtype)

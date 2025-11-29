@@ -236,7 +236,7 @@ def train_fno_hybrid_LOGGING_STEPBASED(model, train_loader, test_loader, optimiz
             # physics mix and energy (mirror SH/PFC style)
             #loss_phys = 6e-3 * (1.0 * l_fft + 0.7 * l_mid_norm + w_lowk * 0.40 * l_lowk)
             loss_phys = 1e-3 * ( l_mid_norm + w_lowk * l_lowk)
-            loss_energy = 0.03 * energy_penalty(u_in_last, y_pred, CFG.DX, CFG.EPS2)
+            loss_energy = 0.3 * energy_penalty(u_in_last, y_pred, CFG.DX, CFG.EPS2)
 
             # total
             loss_total = (1.0 - pde_weight) * loss_data + pde_weight * (loss_phys + loss_scheme + loss_energy)

@@ -31,7 +31,7 @@ from functions import (
     # ---- CH-specific (mirror SH/PFC/MBE structure) ----
     semi_implicit_step_ch,        # public CH teacher
     physics_collocation_tau_L2_CH,# CH collocation residual (L2)
-    physics_guided_update_ch_optimal,
+
     low_k_mse,
     mass_project_pred,            # hard mass projection (CH invariance)
 )
@@ -239,7 +239,7 @@ def train_fno_hybrid_LOGGING_STEPBASED(model, train_loader, test_loader, optimiz
             # )
             #loss_scheme2 = F.mse_loss(y_hat2, u_si2)
             #loss_scheme = w_scheme * (0.6 * loss_scheme1 + 0.4 * loss_scheme2)
-            loss_scheme = w_scheme * (0.6 * loss_scheme1 )
+            loss_scheme = w_scheme * (loss_scheme1 )
 
             # --- spectral low-k anchor (a bit stronger for CH) ---
             l_lowk = low_k_mse(y_hat, u_si1, frac=0.50)
