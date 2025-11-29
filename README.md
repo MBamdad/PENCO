@@ -370,7 +370,7 @@ This summary highlights PENCO’s strong in-distribution performance, demonstrat
 - improved stability during early transient dynamics,
 - and significantly reduced long-horizon drift compared to purely data-driven operators.
 
-![](https://github.com/MBamdad/PENCO/blob/main/AC3D_Hybrid/hybrid_ac3d/In%20Distribution%20results.png)
+![](https://github.com/MBamdad/PENCO/blob/main/Results/In%20Distribution%20results.png)
 
 ---
 ### 5.2 📘 Out-of-Distribution (OOD) Results
@@ -404,7 +404,7 @@ These shapes differ significantly from training data in curvature, interface wid
   - Generally less detailed than the hybrid model.
 
 A complete collection of all OOD evaluation plots (spherical, star-shaped, torus initializations across all PDEs) is provided in the PDF below:
-![](https://github.com/MBamdad/PENCO/blob/main/AC3D_Hybrid/hybrid_ac3d/OOD_plots-1.png)
+![](https://github.com/MBamdad/PENCO/blob/main/Results/OOD_plots-1.png)
 
 ---
 ## 6. Key Takeaways
