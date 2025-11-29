@@ -10,6 +10,10 @@ PENCO combines:
 
 to achieve **accurate, stable, and physically consistent** long-horizon predictions with **very limited training data**.
 
+ ## PENCO Framework Overview
+
+![PENCO Framework](https://github.com/MBamdad/PENCO/blob/main/Results/PENCO.png)
+
 ---
 
 ## 1. Problem Setting
