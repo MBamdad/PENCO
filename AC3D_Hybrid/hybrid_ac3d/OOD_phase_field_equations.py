@@ -10,7 +10,7 @@ from scipy.ndimage import zoom as nd_zoom
 # --- repo imports (your files) ---
 import config as CFG
 from networks import FNO4d, TNO3d
-from functions import semi_implicit_step, semi_implicit_step_pfc, semi_implicit_step_mbe, semi_implicit_step_sh, mass_project_pred, physics_guided_update_pfc_optimal
+from functions import semi_implicit_step, semi_implicit_step_pfc, semi_implicit_step_mbe, semi_implicit_step_sh, mass_project_pred
 import time  # NEW: for timing
 
 # -------------------------------------------------------------------
