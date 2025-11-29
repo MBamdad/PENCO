@@ -9,23 +9,12 @@ import torch as _torch
 SEED = 42
 
 
-def seed_everything(seed: int = SEED):
-    print(f"[Seed] Using seed={seed}")
-    random.seed(seed)
-    np.random.seed(seed)
-    _torch.manual_seed(seed)
-    if _torch.cuda.is_available():
-        _torch.cuda.manual_seed_all(seed)
-
-    # Deterministic CuDNN for reproducibility
-    _torch.backends.cudnn.deterministic = True
-    _torch.backends.cudnn.benchmark = False
 
 DEVICE = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
 
 # ——— Problem selector ———
 # One of: 'AC3D', 'CH3D', 'SH3D', 'MBE3D', 'PFC3D'
-PROBLEM = 'AC3D'   # <- set here when you want Swift–Hohenberg
+PROBLEM = 'PFC3D'   # <- set here when you want Swift–Hohenberg
 
 # ——— Model ———
 MODEL = 'TNO3d'  # 'TNO3d' or 'FNO4d'
@@ -37,8 +26,7 @@ PROBLEM_SPECS = {
         DT=1e-4,
         TOTAL_TIME_STEPS=100,
         EPSILON_PARAM=0.1,
-        #MAT_DATA_PATH="/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/AC3D_32_600_grf3d.mat", # correct
-        MAT_DATA_PATH="/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/AC3D_32_250_grf3d.mat",
+        MAT_DATA_PATH="/scratch/noqu8762/PENCO/data/AC3D_32_250_grf3d.mat",
         CH_LINEAR_COEF=3.0,
     ),
     'CH3D': dict(
@@ -47,11 +35,8 @@ PROBLEM_SPECS = {
         DT= 1e-3, #5e-4, #5e-4, # 5e-3,
         TOTAL_TIME_STEPS=100,
         EPSILON_PARAM=0.05,
-        #MAT_DATA_PATH = "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/CH3D_1500_Nt_101_Nx_32.mat",
         #MAT_DATA_PATH = "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/CH3D_500_Nt_101_Nx_32.mat", # correct, dt= 0.005
-        #MAT_DATA_PATH=  '/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/CH3D_600_Nt_101_Nx_32.mat', # dt= 0.0005 **
-        #MAT_DATA_PATH=  '/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/CH3D_400_Nt_101_Nx_32.mat', # dt= 0.001
-        MAT_DATA_PATH= '/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/CH3D_250_Nt_101_Nx_32.mat', # 0.001
+        MAT_DATA_PATH= '/scratch/noqu8762/PENCO/data/CH3D_250_Nt_101_Nx_32.mat', # dt = 0.001
     ),
     'SH3D': dict(
         GRID_RESOLUTION=32,   # Nx = Ny = Nz
@@ -59,8 +44,8 @@ PROBLEM_SPECS = {
         DT = 5e-2,              # 0.05
         TOTAL_TIME_STEPS=100,
         EPSILON_PARAM=0.15,   # appears as (1 - eps) in the SH linear term
-        #MAT_DATA_PATH="/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/SH3D_grf3d_ff_500_Nt_101_Nx_32.mat", # correct
-        MAT_DATA_PATH="/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/SH3D_grf3d_ff_250_Nt_101_Nx_32.mat",
+        MAT_DATA_PATH="/scratch/noqu8762/PENCO/data/SH3D_grf3d_ff_250_Nt_101_Nx_32.mat",
+        #MAT_DATA_PATH="/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/SH3D_grf3d_ff_250_Nt_101_Nx_32.mat",
     ),
 
     'MBE3D': dict(
@@ -69,13 +54,8 @@ PROBLEM_SPECS = {
         DT=5e-3,
         TOTAL_TIME_STEPS=100,
         EPSILON_PARAM=0.1,
-        #MAT_DATA_PATH="/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/MBE3D_Augmented_800_Nt_101_Nx_32.mat", # 0.05
-        #MAT_DATA_PATH="/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/MBE3D_Augmented_600_Nt_101_Nx_32.mat", # 0.005
-        #MAT_DATA_PATH = "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/MBE3D_Augmented_650_Nt_101_Nx_32.mat", # dt=0.01
-        #MAT_DATA_PATH = "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/MBE3D_Augmented_610_Nt_101_Nx_32.mat", # dt=0.02
-        #MAT_DATA_PATH = '/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/MBE3D_Augmented_400_Nt_101_Nx_32_05.mat', # dt = 0.05
-        #MAT_DATA_PATH = '/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/MBE3D_Augmented_400_Nt_101_Nx_32.mat', # dt=0.005
-        MAT_DATA_PATH = '/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/MBE3D_Augmented_250_Nt_101_Nx_32.mat', # dt=0.005
+        MAT_DATA_PATH = '/scratch/noqu8762/PENCO/data/MBE3D_Augmented_250_Nt_101_Nx_32.mat', # dt=0.005
+        #MAT_DATA_PATH = '/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/MBE3D_Augmented_250_Nt_101_Nx_32.mat', # dt=0.005
     ),
     'PFC3D': dict(
         GRID_RESOLUTION=32,
@@ -83,11 +63,23 @@ PROBLEM_SPECS = {
         DT=1e-2, # 1e-2, old and valid
         TOTAL_TIME_STEPS=100,
         EPSILON_PARAM=0.5,
-        #MAT_DATA_PATH="/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/PFC3D_Augmented_600_Nt_101_Nx_32.mat",
+        MAT_DATA_PATH="/scratch/noqu8762/PENCO/data/PFC3D_Augmented_250_Nt_101_Nx_32.mat", # dt=0.01
         #MAT_DATA_PATH ="/data/PFC3D_Augmented_250_Nt_101_Nx_32_dt05.mat", # dt=0.05
-        MAT_DATA_PATH="/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/PFC3D_Augmented_250_Nt_101_Nx_32.mat", # dt=0.01v
+        #MAT_DATA_PATH="/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/PFC3D_Augmented_250_Nt_101_Nx_32.mat", # dt=0.01
     ),
 }
+
+def seed_everything(seed: int = SEED):
+    print(f"[Seed] Using seed={seed}")
+    random.seed(seed)
+    np.random.seed(seed)
+    _torch.manual_seed(seed)
+    if _torch.cuda.is_available():
+        _torch.cuda.manual_seed_all(seed)
+
+    # Deterministic CuDNN for reproducibility
+    _torch.backends.cudnn.deterministic = True
+    _torch.backends.cudnn.benchmark = False
 
 # Load active problem spec
 _spec = PROBLEM_SPECS[PROBLEM]
