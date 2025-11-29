@@ -303,13 +303,13 @@ These animations demonstrate interface sharpening, coarsening behavior, and long
 ### **2D Phase Evolution**
 The 2D contour evolution highlights PENCO’s ability to maintain sharp interfaces, correct curvature-driven smoothing, and consistent coarsening over the full simulation horizon.
 
-![](https://github.com/MBamdad/PENCO/blob/main/AC3D_Hybrid/hybrid_ac3d/AC3d_results/AC3D_2D_contour_evolution.gif)
+![](https://github.com/MBamdad/PENCO/blob/main/Results/AC3d_results/AC3D_2D_contour_evolution.gif)
 
 ### **3D Phase Evolution**
 The 3D iso-surface evolution captures full volumetric coarsening behavior. PENCO preserves morphology, interface topology, and large-scale structure more accurately than purely data-driven baselines.
 
 <!-- Replace this with your actual 3D GIF path -->
-![](https://github.com/MBamdad/PENCO/blob/main/AC3D_Hybrid/hybrid_ac3d/AC3d_results/AC3D_isosurface_evolution.gif)
+![](https://github.com/MBamdad/PENCO/blob/main/Results/AC3d_results/AC3D_isosurface_evolution.gif)
 
 ---
 
@@ -317,11 +317,11 @@ The 3D iso-surface evolution captures full volumetric coarsening behavior. PENCO
 
 ### **2D Phase Evolution**
 <!-- Replace this link with the CH 2D GIF file -->
-![](https://github.com/MBamdad/PENCO/blob/main/AC3D_Hybrid/hybrid_ac3d/CH3d_results/CH3D_2D_contour_evolution.gif)
+![](https://github.com/MBamdad/PENCO/blob/main/Results/CH3d_results/CH3D_2D_contour_evolution.gif)
 
 ### **3D Phase Evolution**
 <!-- Replace this link with CH 3D GIF file -->
-![](https://github.com/MBamdad/PENCO/blob/main/AC3D_Hybrid/hybrid_ac3d/CH3d_results/CH3D_isosurface_evolution.gif)
+![](https://github.com/MBamdad/PENCO/blob/main/Results/CH3d_results/CH3D_isosurface_evolution.gif)
 
 ---
 
@@ -329,11 +329,11 @@ The 3D iso-surface evolution captures full volumetric coarsening behavior. PENCO
 
 ### **2D Evolution**
 <!-- Replace with SH 2D -->
-![](https://github.com/MBamdad/PENCO/blob/main/AC3D_Hybrid/hybrid_ac3d/SH3D_resluts/SH3D_2D_contour_evolution.gif)
+![](https://github.com/MBamdad/PENCO/blob/main/Results/SH3D_resluts/SH3D_2D_contour_evolution.gif)
 
 ### **3D Evolution**
 <!-- Replace with SH 3D -->
-![](https://github.com/MBamdad/PENCO/blob/main/AC3D_Hybrid/hybrid_ac3d/SH3D_resluts/SH3D_isosurface_evolution.gif)
+![](https://github.com/MBamdad/PENCO/blob/main/Results/SH3D_resluts/SH3D_isosurface_evolution.gif)
 
 ---
 
@@ -341,11 +341,11 @@ The 3D iso-surface evolution captures full volumetric coarsening behavior. PENCO
 
 ### **2D Evolution**
 <!-- Replace with PFC 2D -->
-![](https://github.com/MBamdad/PENCO/blob/main/AC3D_Hybrid/hybrid_ac3d/PFC3D_results/PFC3D_2D_contour_evolution.gif)
+![](https://github.com/MBamdad/PENCO/blob/main/Results/PFC3D_results/PFC3D_2D_contour_evolution.gif)
 
 ### **3D Evolution**
 <!-- Replace with PFC 3D -->
-![](https://github.com/MBamdad/PENCO/blob/main/AC3D_Hybrid/hybrid_ac3d/PFC3D_results/PFC3D_isosurface_evolution.gif)
+![](https://github.com/MBamdad/PENCO/blob/main/Results/PFC3D_results/PFC3D_isosurface_evolution.gif)
 
 ---
 
@@ -353,11 +353,11 @@ The 3D iso-surface evolution captures full volumetric coarsening behavior. PENCO
 
 ### **2D Evolution**
 <!-- Replace with MBE 2D -->
-![](https://github.com/MBamdad/PENCO/blob/main/AC3D_Hybrid/hybrid_ac3d/MBE3d_results/MBE3D_2D_contour_evolution.gif)
+![](https://github.com/MBamdad/PENCO/blob/main/Results/MBE3d_results/MBE3D_2D_contour_evolution.gif)
 
 ### **3D Evolution**
 <!-- Replace with MBE 3D -->
-![](https://github.com/MBamdad/PENCO/blob/main/AC3D_Hybrid/hybrid_ac3d/MBE3d_results/MBE3D_isosurface_evolution.gif)
+![](https://github.com/MBamdad/PENCO/blob/main/Results/MBE3d_results/MBE3D_isosurface_evolution.gif)
 
 ---
 
