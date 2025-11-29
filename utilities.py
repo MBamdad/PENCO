@@ -9,15 +9,11 @@ from torch.cuda.amp import autocast
 
 import math
 from functions import (
-    physics_residual_midpoint, scheme_residual_fourier, loss_mm_projection,
-    semi_implicit_step, energy_penalty, physics_residual_normalized,
-    hminus1_mse,
-
+    semi_implicit_step, energy_penalty,
     # ---- SH additions ----
     semi_implicit_step_sh,                    # SH semi-implicit teacher step
     physics_collocation_tau_L2_SH,            # SH collocation residual (L2)
     energy_penalty_sh,                        # SH energy hinge
-    _mid_residual_norm_sh,
     low_k_mse,
     # ---- PFC additions ----
     semi_implicit_step_pfc,
@@ -25,10 +21,7 @@ from functions import (
     energy_penalty_pfc,
     semi_implicit_step_mbe,
     physics_collocation_tau_L2_MBE, mass_project_pred,
-    energy_penalty_mbe,mass_penalty,
-    # ---- NEW: identical-form L2 collocation for AC & CH ----
-    physics_collocation_tau_L2_AC,
-    pde_rhs,
+    energy_penalty_mbe,
     # ---- CH additions ----
     semi_implicit_step_ch,
     physics_collocation_tau_L2_CH,
@@ -106,7 +99,6 @@ def make_windowed_collate(T_in=4, t_min=None, t_max=None, normalized=False, norm
 # Loaders (your preferred split API)
 # ---------------------
 
-
 def build_loaders():
     rng = np.random.default_rng(config.SEED)
 
@@ -172,11 +164,6 @@ def relative_l2(a, b, eps=1e-12):
 # Training: hybrid
 # ---------------------
 
-
-########################################
-#########################################
-
-## Correct
 def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, device, pde_weight=None):
     pde_weight = config.PDE_WEIGHT if pde_weight is None else pde_weight
 

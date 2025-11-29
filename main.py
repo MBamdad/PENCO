@@ -7,17 +7,6 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from timeit import default_timer as timer
 
-'''''
-# choose the correct beam-style trainer
-if config.PROBLEM == 'AC3D':
-    trainer_fn = train_ac_beamstyle
-elif config.PROBLEM == 'CH3D':
-    trainer_fn = train_ch_beamstyle
-elif config.PROBLEM == 'SH3D':
-    trainer_fn = train_sh_beamstyle
-else:
-    raise ValueError(f"Unsupported PROBLEM={config.PROBLEM} for beam-style trainer")
-'''
 
 def set_seeds(seed=42):
     np.random.seed(seed)
@@ -96,20 +85,8 @@ def main():
     #scheduler = CosineAnnealingLR(optimizer, T_max=config.EPOCHS)
     scheduler = CosineAnnealingLR(optimizer, T_max=TOTAL_STEPS)  # step this every batch
 
-    # Train (hybrid, with PINNs-style debug prints)
-    #train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, device, pde_weight=config.PDE_WEIGHT)
-    # pick λ and α (manual, like the beam study)
-    #lam = config.PDE_WEIGHT  # e.g., 0.25
-    #alpha = config.DATA_LOSS_SCALE  # e.g., 1e7 after checking epoch-0 magnitudes
-    '''
-    trainer_fn(
-        model, train_loader, test_loader, optimizer, config.DEVICE,
-        lambda_tradeoff=config.PDE_WEIGHT,
-        data_loss_scaling_factor=getattr(config, "DATA_LOSS_SCALE", 1.0),
-        use_lbfgs=config.use_lbfgs,  # or True if you want to try it
-        lbfgs_max_iter=30
-    )
-    '''
+    # Training function
+
     start_train = timer()
     train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, config.DEVICE, pde_weight=config.PDE_WEIGHT)
 
