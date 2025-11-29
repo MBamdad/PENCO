@@ -202,10 +202,10 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
         t1 = default_timer()
         data_loss_acc = phys_loss_acc = total_loss_acc = l_mid_norm_ch_cc = 0.0
         energy_loss_acc = scheme_loss_acc = 0.0
-        ut_mse_acc = mu_mse_acc = 0.0
+
         n_batches = 0
         for _ in range(steps_per_epoch):  # ← fixed number of updates each epoch
-            x, y = next(train_iter)  # ← independent of dataset length
+            x, y = next(train_iter)
             x = x.to(device, non_blocking=True)
             y = y.to(device, non_blocking=True)
             u_in_last = x[..., -1:]  # (B,S,S,S,1)
@@ -221,14 +221,14 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
 
             # Correct
             if USE_SH:
-                # ----- SH physics bundle (matches utilities SH branch) -----
+
                 # ramps
                 epoch_frac = ep / max(1, (config.EPOCHS - 1))  # 0..1
                 w_scheme = 0.32 - 0.12 * epoch_frac
                 w_lowk = 0.25 + 0.60 * (epoch_frac ** 2)
 
                 # residuals
-                #l_fft = scheme_residual_fourier(u_in_last, y_hat)
+
                 tau_off = 1.0 / (2.0 * math.sqrt(5.0))
                 l_tau1 = physics_collocation_tau_L2_SH(u_in_last, y_hat, tau=(0.5 - tau_off))
                 l_tau2 = physics_collocation_tau_L2_SH(u_in_last, y_hat, tau=(0.5 + tau_off))
@@ -237,12 +237,6 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
                 # teacher + gentle second step
                 u_si1 = semi_implicit_step_sh(u_in_last, config.DT, config.DX, config.EPSILON_PARAM)
                 loss_scheme1 = F.mse_loss(y_hat, u_si1)
-                #with torch.no_grad():
-                #    u_si2 = semi_implicit_step_sh(u_si1, config.DT, config.DX, config.EPSILON_PARAM)
-                #x2 = torch.cat([x[..., 1:], y_hat], dim=-1)
-                #y_hat2 = model(x2)
-                #loss_scheme2 = F.mse_loss(y_hat2, u_si2)
-                #loss_scheme = w_scheme * (0.6 * loss_scheme1 + 0.4 * loss_scheme2)
                 loss_scheme = w_scheme * (loss_scheme1)
 
                 # low-k anchor
@@ -251,20 +245,17 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
                 # physics mix (scale identical to utilities)
                 loss_phys = 1e-3 * ( l_mid_norm + w_lowk * l_lowk)
 
-
                 # SH free-energy hinge
                 loss_energy = 0.3 * energy_penalty_sh(u_in_last, y_hat, config.DX, config.EPSILON_PARAM)
 
             elif USE_AC:
-                # gentle ramps (same spirit as SH/PFC/MBE)
+                # gentle ramps
                 epoch_frac = ep / max(1, (config.EPOCHS - 1))
                 w_scheme = 0.32 - 0.12 * epoch_frac
                 w_lowk = 0.25 + 0.60 * (epoch_frac ** 2)
 
                 # residuals
-                #l_fft = scheme_residual_fourier(u_in_last, y_hat)  # AC path uses its (explicit) residual
-
-                # Gauss–Lobatto L2 collocation (identical form to others)
+                # Gauss–Lobatto L2 collocation Points
                 tau_off = 1.0 / (2.0 * math.sqrt(5.0))
                 l_tau1 = physics_collocation_tau_L2_AC(u_in_last, y_hat, tau=(0.5 - tau_off))
                 l_tau2 = physics_collocation_tau_L2_AC(u_in_last, y_hat, tau=(0.5 + tau_off))
@@ -273,14 +264,6 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
                 # teacher consistency (AC semi-implicit); PGU on second step
                 u_si1 = semi_implicit_step(u_in_last, config.DT, config.DX, config.EPS2)
                 loss_scheme1 = F.mse_loss(y_hat, u_si1)
-
-                #with torch.no_grad():
-                #    u_si2 = semi_implicit_step(u_si1, config.DT, config.DX, config.EPS2)
-
-                #x2 = torch.cat([x[..., 1:], y_hat], dim=-1)
-                #y_hat2 = model(x2)
-                #y_hat2 = physics_guided_update_ac_optimal(x2[..., -1:], y_hat2, alpha_cap=0.6, low_k_snap_frac=0.45)
-                #loss_scheme2 = F.mse_loss(y_hat2, u_si2)
                 loss_scheme = w_scheme * ( loss_scheme1 )
 
                 # low-k anchor (stabilize coarse scales)
@@ -288,7 +271,6 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
 
                 # physics mix and energy (mirror SH/PFC style)
                 loss_phys = 1e-3 * (l_mid_norm +  w_lowk * l_lowk)
-                #loss_phys =  ( w_lowk * l_mid_norm +   1e-4 * l_lowk)
 
                 loss_energy = 0.3 * energy_penalty(u_in_last, y_hat, config.DX, config.EPS2)
             # correct
@@ -302,8 +284,6 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
                 y_pred = model(x)
                 y_hat = y_pred # mass_project_pred(y_pred, u_in_last)
 
-                # --- Fourier preconditioned semi-implicit residual (CH-aware) ---
-                #l_fft = scheme_residual_fourier(u_in_last, y_hat)
 
                 # --- L2 Gauss–Lobatto collocation (same nodes as SH/PFC/MBE) ---
                 tau_off = 1.0 / (2.0 * math.sqrt(5.0))
@@ -314,32 +294,17 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
                 # --- teacher consistency (CH semi-implicit), with PGU on step-2 ---
                 u_si1 = semi_implicit_step_ch(u_in_last, config.DT, config.DX, config.EPSILON_PARAM)
                 loss_scheme1 = F.mse_loss(y_hat, u_si1)
-
-                # with torch.no_grad():
-                #    u_si2 = semi_implicit_step_ch(u_si1, config.DT, config.DX, config.EPSILON_PARAM)
-
-                # x2 = torch.cat([x[..., 1:], y_hat], dim=-1)
-                # y_hat2 = model(x2)
-                # y_hat2 = physics_guided_update_ch_optimal(
-                #    x2[..., -1:], y_hat2, alpha_cap=0.6, low_k_snap_frac=0.45
-                # )
-                # loss_scheme2 = F.mse_loss(y_hat2, u_si2)
-                # loss_scheme = w_scheme * (0.6 * loss_scheme1 + 0.4 * loss_scheme2)
                 loss_scheme = w_scheme * ( loss_scheme1)
 
                 # --- spectral low-k anchor (a bit stronger for CH) ---
                 l_lowk = low_k_mse(y_hat, u_si1, frac=0.50)
 
-                # --- physics mix (same base scale), add tiny H^{-1} terms ---
-                # loss_phys = 8e-3 * (l_fft + 0.6 * l_mid_norm + w_lowk * 0.70 * l_lowk)
                 loss_phys = 1e-3 * ( l_mid_norm + w_lowk *  l_lowk)
-                # --- energy hinge (AC/CH) + very soft mass regularizer ---
+
                 loss_energy = energy_penalty(u_in_last, y_hat, config.DX, config.EPS2)
 
             elif USE_PFC:
 
-                # project to preserve mean
-                #y_hat = mass_project_pred(y_pred, u_in_last)
                 y_hat = y_pred
 
                 # --- PFC physics bundle (matches utilities) ---
@@ -347,20 +312,15 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
                 w_scheme = 0.32 - 0.12 * epoch_frac
                 w_lowk = 0.25 + 0.60 * (epoch_frac ** 2)
 
-                #l_fft = scheme_residual_fourier(u_in_last, y_hat)
+                # Residual
                 tau_off = 1.0 / (2.0 * math.sqrt(5.0))
                 l_tau1 = physics_collocation_tau_L2_PFC(u_in_last, y_hat, tau=(0.5 - tau_off))
                 l_tau2 = physics_collocation_tau_L2_PFC(u_in_last, y_hat, tau=(0.5 + tau_off))
                 l_mid_norm = 0.5 * (l_tau1 + l_tau2)
 
-                # teacher + gentle second step
+                # Numerical Consistent
                 u_si1 = semi_implicit_step_pfc(u_in_last, config.DT, config.DX, config.EPSILON_PARAM)
                 loss_scheme1 = F.mse_loss(y_hat, u_si1)
-                #with torch.no_grad():
-                #    u_si2 = semi_implicit_step_pfc(u_si1, config.DT, config.DX, config.EPSILON_PARAM)
-                #x2 = torch.cat([x[..., 1:], y_hat], dim=-1)
-                #y_hat2 = model(x2)
-                #loss_scheme2 = F.mse_loss(y_hat2, u_si2)
                 loss_scheme = w_scheme * (loss_scheme1 )
 
                 # low-k anchor
@@ -373,48 +333,35 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
                 loss_energy = 0.3 * energy_penalty_pfc(u_in_last, y_hat, config.DX, config.EPSILON_PARAM)
 
             elif USE_MBE:
-                # project to preserve mean
-                #y_hat = mass_project_pred(y_pred, u_in_last)
 
                 epoch_frac = ep / max(1, (config.EPOCHS - 1))
                 w_scheme = 0.32 - 0.12 * epoch_frac
                 w_lowk = 0.25 + 0.60 * (epoch_frac ** 2)
 
                 # residuals
-                #l_fft = scheme_residual_fourier(u_in_last, y_hat)
+
                 tau_off = 1.0 / (2.0 * math.sqrt(5.0))
                 l_tau1 = physics_collocation_tau_L2_MBE(u_in_last, y_hat, tau=(0.5 - tau_off))
                 l_tau2 = physics_collocation_tau_L2_MBE(u_in_last, y_hat, tau=(0.5 + tau_off))
-                # l_tau_mid = physics_collocation_tau_L2_MBE(u_in_last, y_hat, tau=0.5)
-                # l_mid_norm = 0.25 * (l_tau1 + l_tau2) + 0.50 * l_tau_mid
+
                 l_mid_norm = 0.5 * (l_tau1 + l_tau2)
                 # teacher consistency (+ one more gentle step)
                 u_si1 = semi_implicit_step_mbe(u_in_last, config.DT, config.DX, config.EPSILON_PARAM)
                 loss_scheme1 = F.mse_loss(y_hat, u_si1)
-                #with torch.no_grad():
-                #    u_si2 = semi_implicit_step_mbe(u_si1, config.DT, config.DX, config.EPSILON_PARAM)
-                #x2 = torch.cat([x[..., 1:], y_hat], dim=-1)
-                #y_hat2 = model(x2)
-                # y_hat2 = physics_guided_update_mbe_optimal(y_hat, y_hat2, alpha_cap=0.6, low_k_snap_frac=0.45)
-                #loss_scheme2 = F.mse_loss(y_hat2, u_si2)
-                #loss_scheme = w_scheme * (0.6 * loss_scheme1 + 0.4 * loss_scheme2)
                 loss_scheme = w_scheme * ( loss_scheme1 )
                 # spectral low-k anchor
                 l_lowk = low_k_mse(y_hat, u_si1, frac=0.50)
 
-                # physics mix (scale identical to utilities)
-                #loss_phys = 6e-3 * (1.0 * l_fft + l_mid_norm + w_lowk * 0.40 * l_lowk)
                 loss_phys = 1e-3 * ( l_mid_norm + w_lowk * l_lowk)
-                # energy hinge + tiny mass regularizer
+
                 loss_energy = 0.3 * energy_penalty_mbe(u_in_last, y_hat, config.DX, config.EPSILON_PARAM)
+
             else:
                 raise RuntimeError(f"Unknown/unsupported PROBLEM: {config.PROBLEM}")
 
             # ---- total loss (unchanged structure) ----
             loss_total = (1.0 - pde_weight) * loss_data + pde_weight * (loss_phys + loss_scheme + loss_energy)
-            #loss_total = (1.0 - pde_weight) * loss_data + pde_weight * loss_phys
-            # combined objective (identical form across modes)
-            #loss_total = (1.0 - lam) * loss_data +  lam * loss_phys
+
 
 
             # backward
@@ -426,15 +373,11 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
             # accumulators
             data_loss_acc  += loss_data.item()
             phys_loss_acc  += loss_phys.item()
-            #data_loss_acc += contrib_data.item()
-            #phys_loss_acc += contrib_phys.item()
             l_mid_norm_ch_cc += l_mid_norm.item()
             energy_loss_acc += loss_energy.item()
             scheme_loss_acc += loss_scheme.item()
-            #scheme_loss_acc += 0
             total_loss_acc += loss_total.item()
             n_batches      += 1
-            # LR scheduler should step **per update** (see main.py change)
             scheduler.step()
 
         # eval
