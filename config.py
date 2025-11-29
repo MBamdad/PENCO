@@ -14,7 +14,7 @@ DEVICE = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
 
 # ——— Problem selector ———
 # One of: 'AC3D', 'CH3D', 'SH3D', 'MBE3D', 'PFC3D'
-PROBLEM = 'PFC3D'   # <- set here when you want Swift–Hohenberg
+PROBLEM = 'AC3D'   # <- set here when you want Swift–Hohenberg
 
 # ——— Model ———
 MODEL = 'TNO3d'  # 'TNO3d' or 'FNO4d'
@@ -159,7 +159,7 @@ else:
 WEIGHT_DECAY = 1e-5
 PDE_WEIGHT = 0.25
 
-N_TRAIN = 50
+N_TRAIN = 100
 N_TEST = max(1, N_TRAIN // 4)
 
 # ——— Debug print scaling ———
