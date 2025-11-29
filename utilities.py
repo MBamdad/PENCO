@@ -287,8 +287,8 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
                 l_lowk = low_k_mse(y_hat, u_si1, frac=0.45)
 
                 # physics mix and energy (mirror SH/PFC style)
-                #loss_phys = 1e-3 * (l_mid_norm +  w_lowk * l_lowk)
-                loss_phys =  ( w_lowk * l_mid_norm +   1e-4 * l_lowk)
+                loss_phys = 1e-3 * (l_mid_norm +  w_lowk * l_lowk)
+                #loss_phys =  ( w_lowk * l_mid_norm +   1e-4 * l_lowk)
 
                 loss_energy = 0.3 * energy_penalty(u_in_last, y_hat, config.DX, config.EPS2)
             # correct
