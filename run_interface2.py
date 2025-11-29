@@ -13,9 +13,11 @@ from torch.utils.data import DataLoader, random_split
 
 # ============================================================================
 # 1. CHOOSE CASE STUDY AND MODEL APPROACH
+
+## this is for AC3d code in matlab ##
 # ============================================================================
-case_study = 'CH3D'    # Options: 'SH3D', 'AC3D', 'CH3D', 'MBE3D', 'PFC3D'
-approach = 'FNO4d'  # Options: 'MHNO', 'PI_MHNO', 'FNO4d'
+case_study = 'AC3D'    # Options: 'SH3D', 'AC3D', 'CH3D', 'MBE3D', 'PFC3D'
+approach = 'MHNO'  # Options: 'MHNO', 'PI_MHNO', 'FNO4d'
 
 # Validate the approach choice
 if approach not in ['MHNO', 'PI_MHNO', 'FNO4d']:

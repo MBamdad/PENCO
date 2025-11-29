@@ -1915,11 +1915,8 @@ def train_hybrid_fno4d(
                 out_phys = out
                 y_phys   = y_next
 
-            data_loss = F.mse_loss(
-                out_phys.flatten(start_dim=1),
-                y_phys.flatten(start_dim=1),
-                reduction='mean'
-            )
+            #data_loss = F.mse_loss(out_phys.flatten(start_dim=1),y_phys.flatten(start_dim=1), reduction='mean')
+            data_loss = myloss(out_phys.flatten(start_dim=1), y_phys.flatten(start_dim=1))
 
             # ---- physics (discrete residual, teacher forcing on u_prev) ----
             u_next = out_phys[..., 0]                  # (B,s,s,s)
@@ -1968,7 +1965,8 @@ def train_hybrid_fno4d(
                 if y_normalizer is not None:
                     ov      = y_normalizer.decode(ov)
                     yv_next = y_normalizer.decode(yv_next)
-                val_sum += F.mse_loss(ov.flatten(start_dim=1), yv_next.flatten(start_dim=1), reduction='mean').item()
+                #val_sum += F.mse_loss(ov.flatten(start_dim=1), yv_next.flatten(start_dim=1), reduction='mean').item()
+                val_sum += myloss(ov.flatten(start_dim=1), yv_next.flatten(start_dim=1)).item()
             val_mean = val_sum / max(1, vn)
 
         t2 = default_timer()
@@ -1981,3 +1979,170 @@ def train_hybrid_fno4d(
         test_l2_log.append(val_mean)
 
     return model, train_total_log, train_data_log, train_pde_scaled_log, test_l2_log
+
+
+
+# training.py
+import torch
+import torch.nn.functional as F
+from timeit import default_timer
+from physics_ac3d import allen_cahn_physics_loss_stable
+import numpy as np  # ensure at top of file
+
+
+
+def train_fno_hybrid_ac3d(
+    model, myloss, epochs, batch_size, train_loader, test_loader,
+    optimizer, scheduler, normalized, normalizer, device,
+    pde_weight, grid_info
+):
+    """
+    Hybrid trainer: data loss + pde_weight * physics loss (Allen–Cahn 3D strong form, stabilized).
+
+    - Data path is IDENTICAL to train_fno (same decode, flatten, reductions, optimizer/scheduler timing).
+    - Physics is computed on the decoded prediction and mixed via pde_weight.
+    - Prints the same columns as train_fno + Phys Total, PDE, IC, BC.
+    - Uses a low-pass cutoff k_cut that ramps from ~40% to 100% of the provided 'modes'
+      (if 'modes' not in grid_info, low-pass is disabled).
+    """
+    import numpy as np
+    import torch
+    import torch.nn.functional as F
+    from timeit import default_timer
+    from physics_ac3d import allen_cahn_physics_loss_stable
+
+    # Logs
+    train_mse_log, train_l2_log, test_l2_log = [], [], []
+    train_phys_log, train_pde_log, train_ic_log, train_bc_log = [], [], [], []
+
+    # Normalizer like in train_fno
+    y_normalizer = normalizer[1].to(device) if (normalized and normalizer is not None) else None
+
+    # Physics metadata
+    Nx, Ny, Nz = grid_info['Nx'], grid_info['Ny'], grid_info['Nz']
+    Lx, Ly, Lz = grid_info['Lx'], grid_info['Ly'], grid_info['Lz']
+    dt = grid_info['dt_model']
+    # Prefer CAHN = eps^2 if present, else 'epsilon'
+    epsilon = (grid_info['CAHN']**0.5) if ('CAHN' in grid_info) else grid_info['epsilon']
+
+    # Optional: spatial modes to define a k_cut schedule (stabilizes PDE metric)
+    modes_val = grid_info.get('modes', None)
+
+    for ep in range(epochs):
+        model.train()
+        t1 = default_timer()
+
+        train_mse = 0.0
+        train_l2  = 0.0
+        train_phys= 0.0
+        train_pde = 0.0
+        train_ic  = 0.0
+        train_bc  = 0.0
+
+        # Low-pass cutoff schedule (fraction 0.4 -> 1.0 over training), if 'modes' provided
+        if modes_val is not None and modes_val > 0:
+            base_kcut = (2.0 * np.pi / Lx) * float(modes_val)
+            phase     = ep / max(1, epochs - 1)   # 0 -> 1
+            k_cut     = base_kcut * (0.4 + 0.6 * phase)
+        else:
+            k_cut = None  # disable low-pass if no modes
+
+        for x, y in train_loader:
+            x, y = x.to(device), y.to(device)
+
+            optimizer.zero_grad()
+
+            # === DATA PATH: EXACTLY LIKE train_fno ===
+            out = model(x)
+
+            # Decode for data loss (and for physics)
+            if y_normalizer is not None:
+                out_dec = y_normalizer.decode(out)
+                y_dec   = y_normalizer.decode(y)
+            else:
+                out_dec = out
+                y_dec   = y
+
+            # Data losses (unchanged)
+            mse       = F.mse_loss(out_dec.flatten(start_dim=1), y_dec.flatten(start_dim=1), reduction='mean')
+            data_loss = myloss(out_dec.flatten(start_dim=1),      y_dec.flatten(start_dim=1))
+
+            # === PHYSICS (decoded prediction; does NOT touch data path) ===
+            # Ensure u_pred has a time axis last: (B,X,Y,Z,T_pred)
+            if out_dec.ndim == 4:
+                u_pred_for_phys = out_dec.unsqueeze(-1)  # (B,X,Y,Z,1)
+            else:
+                u_pred_for_phys = out_dec                # (B,X,Y,Z,T)
+
+            # Initial condition from input (first channel)
+            u0 = x[..., 0].contiguous()  # (B,Nx,Ny,Nz)
+
+            phys = allen_cahn_physics_loss_stable(
+                u0=u0,
+                u_pred=u_pred_for_phys,
+                Lx=Lx, Ly=Ly, Lz=Lz,
+                dt=dt,
+                epsilon=epsilon,
+                k_cut=k_cut,          # <--- stabilized residual band, widens with epoch
+                huber_delta=0.01,
+                use_dealias=True
+            )
+            phys_loss = phys['physics']
+
+            # === TOTAL LOSS MIX ===
+            total_loss = (1.0 - pde_weight) * data_loss + pde_weight * phys_loss
+
+            total_loss.backward()
+            optimizer.step()
+            scheduler.step()
+
+            # Logs
+            train_mse += mse.item()
+            train_l2  += data_loss.item()
+            train_phys+= phys_loss.item()
+            train_pde += phys['pde'].item()
+            train_ic  += phys['ic'].item()
+            train_bc  += phys['bc'].item()
+
+        # === EVAL (unchanged data-only eval like train_fno) ===
+        model.eval()
+        test_l2 = 0.0
+        with torch.no_grad():
+            for x, y in test_loader:
+                x, y = x.to(device), y.to(device)
+                out = model(x)
+                if y_normalizer is not None:
+                    out = y_normalizer.decode(out)
+                    y   = y_normalizer.decode(y)
+                test_l2 += myloss(out.flatten(start_dim=1), y.flatten(start_dim=1)).item()
+
+        # Epoch reductions (identical scaling to train_fno)
+        train_mse /= len(train_loader)
+        train_l2  /= (batch_size * len(train_loader))
+        test_l2   /= (batch_size * len(test_loader))
+
+        # Physics terms averaged per-batch the same way
+        train_phys/= (batch_size * len(train_loader))
+        train_pde /= (batch_size * len(train_loader))
+        train_ic  /= (batch_size * len(train_loader))
+        train_bc  /= (batch_size * len(train_loader))
+
+        # Save logs
+        train_mse_log.append(train_mse)
+        train_l2_log.append(train_l2)
+        test_l2_log.append(test_l2)
+        train_phys_log.append(train_phys)
+        train_pde_log.append(train_pde)
+        train_ic_log.append(train_ic)
+        train_bc_log.append(train_bc)
+
+        t2 = default_timer()
+        if ep == 0:
+            print("No. Epoch   Time (s)      Train MSE     Train L2       Test L2        "
+                  "Phys Total     PDE           IC            BC")
+        print(f"{ep:<10} {t2 - t1:<13.6f} {train_mse:<13.10f} {train_l2:<13.10f} {test_l2:<13.10f} "
+              f"{train_phys:<13.10f} {train_pde:<13.10f} {train_ic:<13.10f} {train_bc:<13.10f}")
+
+    return (model,
+            train_mse_log, train_l2_log, test_l2_log,
+            train_phys_log, train_pde_log, train_ic_log, train_bc_log)

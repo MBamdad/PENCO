@@ -10,7 +10,7 @@ import scipy.io
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
-from training import train_fno, train_fno_time, train_fno4d, train_hybrid_fno4d
+from training import train_fno, train_fno_time, train_fno4d, train_hybrid_fno4d, train_fno_hybrid_ac3d
 from torch.utils.data import DataLoader, random_split
 from utilities import ImportDataset, count_params, LpLoss, ModelEvaluator  # , SobolevLoss
 from post_processing import plot_loss_trend, plot_combined_results_3d, plot_combined_results, plot_field_trajectory, \
@@ -221,12 +221,7 @@ if cf.normalized and normalizers is not None:
 if cf.training:
     print("\n--- Starting Training ---")
     if PINN_MODE:
-        grid_info = {
-            'Nx': cf.s, 'Ny': cf.s, 'Nz': cf.s,
-            'Lx': cf.Lx, 'Ly': cf.Lx, 'Lz': cf.Lx,
-            'dt_model': cf.dt_model,
-            'CAHN': cf.epsilon ** 2,  # <— add this (your MATLAB uses Cahn = epsilon^2)
-        }
+
 
         print(f"Running Hybrid (PINN) training with pde_weight={cf.pde_weight:.2f}")
         if network_name == 'FNO4d':
@@ -243,19 +238,27 @@ if cf.training:
             )
             '''
 
-            (
-                model, train_total_log, train_data_log,
-                train_pde_log, test_l2_log
-            ) = train_hybrid_fno4d(
-                model, myloss, cf.epochs, train_loader, test_loader,
+            grid_info = {
+                'Nx': cf.s, 'Ny': cf.s, 'Nz': cf.s,
+                'Lx': cf.Lx, 'Ly': cf.Ly, 'Lz': cf.Lz,
+                'dt_model': cf.dt_model,
+                'CAHN': cf.epsilon ** 2,
+                'modes': cf.modes,  # <-- add this
+            }
+
+            (model,
+             train_mse_log, train_l2_log, test_l2_log,
+             train_phys_log, train_pde_log, train_ic_log, train_bc_log
+             ) = train_fno_hybrid_ac3d(
+                model, myloss, cf.epochs, cf.batch_size, train_loader, test_loader,
                 optimizer, scheduler, cf.normalized, normalizers, device,
                 pde_weight=cf.pde_weight,
-                grid_info=grid_info,
+                grid_info=grid_info
             )
 
 
         # Map the logs from the trainer to the variables used for saving/plotting
-        train_l2_hybrid_log = train_total_log
+        train_l2_hybrid_log = train_l2_log
         train_pde_scaled_log = train_pde_log
         test_data_log = test_l2_log
         test_loss_hybrid_log = test_data_log

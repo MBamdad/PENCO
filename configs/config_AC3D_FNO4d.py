@@ -6,12 +6,12 @@ torch_seed = 0
 numpy_seed = 0
 
 # Network Parameters
-nTrain = 1200 # 900 # 1000
-nTest = 300 # 100 # 100
-batch_size = 20 # 50 # 20 #5 # 25
-learning_rate = 0.001
+nTrain = 100 # 200 #1200  900 # 1000
+nTest = 25 # 50 #300 100 # 100
+batch_size = 10 # 10 # 20 # 20 # 50 # 20 #5 # 25
+learning_rate =  0.001 # 0.02
 weight_decay = 1e-4
-epochs = 25 # 50 # 100 # 900  # 100
+epochs = 30 # 25 # 50 # 100 # 900  # 100
 iterations = epochs * (nTrain // batch_size)
 modes =  14 # 8 # last time modes =  8
 width =  12 # 32 # last time width =  32
@@ -22,7 +22,7 @@ n_layers = 2
 # Discretization
 s = 32
 T_in = 1
-T_out = 100 # 100
+T_out = 100 # for 100 time frames
 
 # Training Setting
 normalized = True
@@ -39,7 +39,7 @@ matlab_dataset = 'AC3D_32_1500_grf3d.mat'
 Lx = 5 # np.pi # 1.0 # Domain size (assuming Lx=Ly=Lz based on MATLAB)
 Ly =Lx
 Lz= Lx
-index = 62  # 24 # 62
+index = 4 # 16 # 62  # 24 # 62
 #domain = [-np.pi, np.pi] ######
 domain = [-Lx/2, Lx/2]
 #time_steps = [0, 4, 9, 14, 19, 24, 29, 34, 39, 44, 49,
@@ -61,10 +61,16 @@ dt_model = ns * dt_sim # Effective time step between model outputs
 # PDE Parameters
 epsilon = 0.1
 #pde_weight = 0.3 # Example: 30% physics loss
-pde_weight = 0.5 # Example: 70% physics loss
-
+pde_weight = 0.25 # 0.25 # Example: 70% physics loss
+lambda_param = pde_weight
 # Learning Rate Scheduler Parameters (for StepLR)
 scheduler_step = 20  # Decay learning rate every 20 epochs
 scheduler_gamma = 0.5 # Multiply learning rate by 0.5 each time
-pde_loss_scaler = 1e-3
+pde_loss_scaler = 1e0
+temporal_pde_weight = 1.0
+spatial_pde_weight = 0.2
+pretrain_epochs = 5 # Number of epochs to pre-train the FNO path
+anneal_epochs = 20           # Number of epochs to gradually fade in the physics loss (from 0 to pde_weight).
+use_dynamic_scaler = True    # SET THIS TO TRUE to use the automatic balancing.
 
+lambda_energy = 1e-3
