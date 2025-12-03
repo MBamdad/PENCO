@@ -72,6 +72,7 @@ class AC3DTrajectoryDataset(Dataset):
 # ---------------------
 # Collate: convert trajectories -> (x,y) windows
 # ---------------------
+'''
 def make_windowed_collate(T_in=4, t_min=None, t_max=None, normalized=False, normalizers=None):
     y_norm = normalizers[1] if (normalized and normalizers is not None) else None
     def _collate(batch):
@@ -93,6 +94,53 @@ def make_windowed_collate(T_in=4, t_min=None, t_max=None, normalized=False, norm
             x = (x - y_norm.m)/y_norm.s
             y = (y - y_norm.m)/y_norm.s
         return x, y
+    return _collate
+'''
+def make_windowed_collate(T_in=4, T_out=1, t_min=None, t_max=None,
+                          normalized=False, normalizers=None):
+    y_norm = normalizers[1] if (normalized and normalizers is not None) else None
+
+    def _collate(batch):
+        # traj: (Nt, S, S, S)
+        Nt = batch[0].shape[0]
+
+        # we need t such that:
+        #  - we have T_in frames ending at t         -> t >= T_in - 1
+        #  - we can take T_out frames (t+1 ... t+T_out) within trajectory.
+        # traj indices: 0 ... Nt-1
+        # last valid t satisfies: t + T_out <= Nt - 1  -> t <= Nt - 1 - T_out
+        t0 = T_in - 1 if t_min is None else max(T_in - 1, t_min)
+        t1_raw = Nt - 1 - T_out
+        if t_max is None:
+            t1 = t1_raw
+        else:
+            t1 = min(t1_raw, t_max)
+
+        xs, ys = [], []
+        for traj in batch:                 # traj: (Nt,S,S,S)
+            t = random.randint(t0, t1)
+
+            # input window: [t-(T_in-1), ..., t]
+            x = traj[t-(T_in-1):t+1]           # (T_in,S,S,S)
+
+            # output window: [t+1, ..., t+T_out]
+            y = traj[t+1:t+1+T_out]           # (T_out,S,S,S)
+
+            # reorder to channel-last
+            x = x.permute(1, 2, 3, 0).contiguous()  # (S,S,S,T_in)
+            y = y.permute(1, 2, 3, 0).contiguous()  # (S,S,S,T_out)
+
+            xs.append(x); ys.append(y)
+
+        x = torch.stack(xs, dim=0)  # (B,S,S,S,T_in)
+        y = torch.stack(ys, dim=0)  # (B,S,S,S,T_out)
+
+        if y_norm is not None:
+            x = (x - y_norm.m)/y_norm.s
+            y = (y - y_norm.m)/y_norm.s
+
+        return x, y
+
     return _collate
 
 # ---------------------
@@ -130,8 +178,15 @@ def build_loaders():
 
     normalizers = [train_base.normalizer_x, train_base.normalizer_y]
 
+    #collate = make_windowed_collate(
+    #    T_in=config.T_IN_CHANNELS, t_min=0, t_max=config.TOTAL_TIME_STEPS-1,
+    #    normalized=False, normalizers=normalizers
+    #)
+
     collate = make_windowed_collate(
-        T_in=config.T_IN_CHANNELS, t_min=0, t_max=config.TOTAL_TIME_STEPS-1,
+        T_in=config.T_IN_CHANNELS,
+        T_out=getattr(config, "T_OUT", 1),  # 👈 depend on T_OUT
+        t_min=0, t_max=config.TOTAL_TIME_STEPS - 1,
         normalized=False, normalizers=normalizers
     )
 
@@ -175,12 +230,10 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
     USE_MBE = (config.PROBLEM == 'MBE3D')  # <-- add this
     CLIP_NORM = 1.0
 
-
     print("Epoch |   Time   | DataLoss | PhysLoss | TotalLoss | Test relL2 | energy_loss | scheme_loss | l_mid_norm_ch_cc | LR")
 
     # FIXED number of updates per epoch (independent of N_TRAIN)
     steps_per_epoch = getattr(config, "STEPS_PER_EPOCH_EFF", getattr(config, "STEPS_PER_EPOCH", 20))
-
 
     train_iter = cycle(train_loader)  # infinite stream of batches
 
@@ -240,26 +293,26 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
                 epoch_frac = ep / max(1, (config.EPOCHS - 1))
                 w_scheme = 0.32 - 0.12 * epoch_frac
                 w_lowk = 0.25 + 0.60 * (epoch_frac ** 2)
-
-                # residuals
-                # Gauss–Lobatto L2 collocation Points
+                # --- multi-step collocation (uses T_OUT inside) ---
                 tau_off = 1.0 / (2.0 * math.sqrt(5.0))
                 l_tau1 = physics_collocation_tau_L2_AC(u_in_last, y_hat, tau=(0.5 - tau_off))
                 l_tau2 = physics_collocation_tau_L2_AC(u_in_last, y_hat, tau=(0.5 + tau_off))
                 l_mid_norm = 0.5 * (l_tau1 + l_tau2)
+                # --- multi-step semi-implicit teacher ---
+                # semi_implicit_step returns shape (B,S,S,S,T_out)
+                u_si_all = semi_implicit_step(u_in_last, config.DT, config.DX, config.EPS2)
+                # scheme consistency over all T_out steps
+                loss_scheme1 = F.mse_loss(y_hat, u_si_all)
+                loss_scheme = w_scheme * loss_scheme1
 
-                # teacher consistency (AC semi-implicit); PGU on second step
-                u_si1 = semi_implicit_step(u_in_last, config.DT, config.DX, config.EPS2)
-                loss_scheme1 = F.mse_loss(y_hat, u_si1)
-                loss_scheme = w_scheme * ( loss_scheme1 )
-
-                # low-k anchor (stabilize coarse scales)
-                l_lowk = low_k_mse(y_hat, u_si1, frac=0.45)
-
-                # physics mix and energy (mirror SH/PFC style)
-                loss_phys = 1e-3 * (l_mid_norm +  w_lowk * l_lowk)
-
-                loss_energy = 0.3 * energy_penalty(u_in_last, y_hat, config.DX, config.EPS2)
+                # --- low-k & energy: keep them single-step on the FIRST predicted frame ---
+                y_first = y_hat[..., 0:1]  # (B,S,S,S,1)
+                u_si_first = u_si_all[..., 0:1]  # (B,S,S,S,1)
+                l_lowk = low_k_mse(y_first, u_si_first, frac=0.45)
+                # physics mix (same structure as before, just using new l_mid_norm/l_lowk)
+                loss_phys = 1e-3 * (l_mid_norm + w_lowk * l_lowk)
+                # energy hinge on first frame only (no change to energy_penalty function)
+                loss_energy = 0.3 * energy_penalty(u_in_last, y_first, config.DX, config.EPS2)
             # correct
             elif USE_CH:
                 # gentle ramps like SH/PFC/MBE
@@ -291,9 +344,7 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
                 loss_energy = energy_penalty(u_in_last, y_hat, config.DX, config.EPS2)
 
             elif USE_PFC:
-
                 y_hat = y_pred
-
                 # --- PFC physics bundle (matches utilities) ---
                 epoch_frac = ep / max(1, (config.EPOCHS - 1))
                 w_scheme = 0.32 - 0.12 * epoch_frac
@@ -388,6 +439,7 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
 # ---------------------
 # Evaluation: rollout
 # ---------------------
+'''
 def rollout_autoregressive(model, traj_np, T_in, Nt=100):
     """
     traj_np: (Nt+1, S,S,S) ground truth trajectory for one sample
@@ -412,6 +464,49 @@ def rollout_autoregressive(model, traj_np, T_in, Nt=100):
         pred[t + 1] = y_step
     # only convert ONCE at the end
     pred_np = pred.detach().cpu().numpy()  # (Nt+1,Sx,Sy,Sz)
+    return pred_np
+'''
+def rollout_autoregressive(model, traj_np, T_in, Nt=100):
+    """
+    traj_np: (Nt+1, S,S,S) ground truth trajectory for one sample
+    returns pred: same shape, with pred[0:T_in]=gt[0:T_in],
+    and the rest filled autoregressively in blocks of T_OUT.
+    """
+    device = next(model.parameters()).device
+    Nt_plus1, Sx, Sy, Sz = traj_np.shape
+    assert Nt_plus1 >= Nt + 1
+
+    T_out = int(getattr(config, "T_OUT", 1))
+
+    traj_torch = torch.from_numpy(traj_np).to(device)  # (Nt+1,Sx,Sy,Sz)
+    pred = traj_torch.clone()
+    model.eval()
+
+    t = T_in - 1
+    while t < Nt:
+        # input window ending at time t
+        x_win = pred[t - (T_in - 1):t + 1]  # (T_in,Sx,Sy,Sz)
+        x = x_win.permute(1, 2, 3, 0).unsqueeze(0)  # (1,Sx,Sy,Sz,T_in)
+
+        with torch.no_grad():
+            y_block = model(x)  # (1,Sx,Sy,Sz,T_out_expected)
+
+        # Make sure we handle either T_OUT=1 or >1
+        assert y_block.dim() == 5
+        this_T_out = y_block.shape[-1]   # usually = config.T_OUT
+
+        # write predicted steps back into pred
+        for k in range(this_T_out):
+            t_next = t + 1 + k
+            if t_next > Nt:
+                break
+            y_step = y_block[..., k]      # (1,Sx,Sy,Sz)
+            y_step = y_step.squeeze(0)    # (Sx,Sy,Sz)
+            pred[t_next] = y_step
+
+        t += this_T_out  # jump forward by the number of predicted steps
+
+    pred_np = pred.detach().cpu().numpy()
     return pred_np
 
 
