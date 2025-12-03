@@ -4,20 +4,15 @@ from pathlib import Path
 import random
 import torch as _torch
 
-
 # ——— Core ———
 SEED = 42
 
-
-
-DEVICE = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
-
+DEVICE = torch.device('cuda:2' if torch.cuda.is_available() else 'cpu')
 # ——— Problem selector ———
 # One of: 'AC3D', 'CH3D', 'SH3D', 'MBE3D', 'PFC3D'
-PROBLEM = 'AC3D'   # <- set here when you want Swift–Hohenberg
-
+PROBLEM = 'PFC3D'   # <- set here when you want Swift–Hohenberg
 # ——— Model ———
-MODEL = 'TNO3d'  # 'TNO3d' or 'FNO4d'
+MODEL = 'FNO4d'  # 'TNO3d' or 'FNO4d'
 
 PROBLEM_SPECS = {
     'AC3D': dict(
@@ -26,7 +21,7 @@ PROBLEM_SPECS = {
         DT=1e-4,
         TOTAL_TIME_STEPS=100,
         EPSILON_PARAM=0.1,
-        MAT_DATA_PATH="/scratch/noqu8762/PENCO/data/AC3D_32_250_grf3d.mat",
+        MAT_DATA_PATH="/scratch/noqu8762/PENCOO/data/AC3D_32_250_grf3d.mat",
         CH_LINEAR_COEF=3.0,
     ),
     'CH3D': dict(
@@ -36,7 +31,7 @@ PROBLEM_SPECS = {
         TOTAL_TIME_STEPS=100,
         EPSILON_PARAM=0.05,
         #MAT_DATA_PATH = "/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/CH3D_500_Nt_101_Nx_32.mat", # correct, dt= 0.005
-        MAT_DATA_PATH= '/scratch/noqu8762/PENCO/data/CH3D_250_Nt_101_Nx_32.mat', # dt = 0.001
+        MAT_DATA_PATH= '/scratch/noqu8762/PENCOO/data/CH3D_250_Nt_101_Nx_32.mat', # dt = 0.001
     ),
     'SH3D': dict(
         GRID_RESOLUTION=32,   # Nx = Ny = Nz
@@ -44,7 +39,7 @@ PROBLEM_SPECS = {
         DT = 5e-2,              # 0.05
         TOTAL_TIME_STEPS=100,
         EPSILON_PARAM=0.15,   # appears as (1 - eps) in the SH linear term
-        MAT_DATA_PATH="/scratch/noqu8762/PENCO/data/SH3D_grf3d_ff_250_Nt_101_Nx_32.mat",
+        MAT_DATA_PATH="/scratch/noqu8762/PENCOO/data/SH3D_grf3d_ff_250_Nt_101_Nx_32.mat",
         #MAT_DATA_PATH="/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/SH3D_grf3d_ff_250_Nt_101_Nx_32.mat",
     ),
 
@@ -54,7 +49,7 @@ PROBLEM_SPECS = {
         DT=5e-3,
         TOTAL_TIME_STEPS=100,
         EPSILON_PARAM=0.1,
-        MAT_DATA_PATH = '/scratch/noqu8762/PENCO/data/MBE3D_Augmented_250_Nt_101_Nx_32.mat', # dt=0.005
+        MAT_DATA_PATH = '/scratch/noqu8762/PENCOO/data/MBE3D_Augmented_250_Nt_101_Nx_32.mat', # dt=0.005
         #MAT_DATA_PATH = '/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/MBE3D_Augmented_250_Nt_101_Nx_32.mat', # dt=0.005
     ),
     'PFC3D': dict(
@@ -63,7 +58,7 @@ PROBLEM_SPECS = {
         DT=1e-2, # 1e-2, old and valid
         TOTAL_TIME_STEPS=100,
         EPSILON_PARAM=0.5,
-        MAT_DATA_PATH="/scratch/noqu8762/PENCO/data/PFC3D_Augmented_250_Nt_101_Nx_32.mat", # dt=0.01
+        MAT_DATA_PATH="/scratch/noqu8762/PENCOO/data/PFC3D_Augmented_250_Nt_101_Nx_32.mat", # dt=0.01
         #MAT_DATA_PATH ="/data/PFC3D_Augmented_250_Nt_101_Nx_32_dt05.mat", # dt=0.05
         #MAT_DATA_PATH="/scratch/noqu8762/phase_field_equations_4d/AC3D_Hybrid/data/PFC3D_Augmented_250_Nt_101_Nx_32.mat", # dt=0.01
     ),
@@ -103,7 +98,7 @@ EPS2 = EPSILON_PARAM ** 2
 PHYS_MAX_SCALE = 2.0
 # ——— Data ———
 MAT_DATA_PATH = _spec['MAT_DATA_PATH']
-T_IN_CHANNELS = 4
+
 
 SCALE_STEPS_WITH_NTRAIN = True   # set True to mimic "beam behavior"
 use_lbfgs = False # True
@@ -155,11 +150,14 @@ if PROBLEM == 'MBE3D':
 else:
     LEARNING_RATE = 1e-3
 
+T_IN_CHANNELS = 4 # number of past frames the model sees
+T_OUT = 1 # determines how much future the model predicts
+
 
 WEIGHT_DECAY = 1e-5
 PDE_WEIGHT = 0.25
 
-N_TRAIN = 100
+N_TRAIN = 200
 N_TEST = max(1, N_TRAIN // 4)
 
 # ——— Debug print scaling ———

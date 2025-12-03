@@ -52,6 +52,7 @@ def _charbonnier_mean(x, eps=1e-8):
 # === NEW: L2 Gauss–Lobatto collocation for AC3D (identical form to SH/PFC/MBE) ===
 import math
 
+
 def physics_collocation_tau_L2_AC(u_in, u_pred,
                                   tau=0.5 - 1.0/(2.0*math.sqrt(5.0)),
                                   normalize=True):
@@ -76,6 +77,73 @@ def physics_collocation_tau_L2_AC(u_in, u_pred,
         R = ut / s_t - rhs_tau / s_r
     else:
         R = ut - rhs_tau
+    return (R**2).mean().to(u_pred.dtype)
+
+def physics_collocation_tau_L2_AC_Tout(u_in, u_pred,
+                                  tau=0.5 - 1.0/(2.0*math.sqrt(5.0)),
+                                  normalize=True):
+    """
+    AC3D collocation at u_tau:
+      R_tau = (u^{n+1}-u^n)/dt - RHS_AC(u_tau), scored in L2.
+
+    Extended to handle:
+      u_pred: (B,S,S,S,1)  or  (B,S,S,S,T_out)
+
+    For T_out > 1, we interpret u_pred[...,k] as u^{n+k} and build
+    a temporal chain u^n, u^{n+1}, ..., u^{n+T_out}, computing
+    residuals for each step.
+    """
+    assert config.PROBLEM == 'AC3D'
+    dt, dx = config.DT, config.DX
+
+    # u0: last known state, shape (B,S,S,S)
+    u0 = u_in.squeeze(-1).float()   # (B,S,S,S)
+
+    up = u_pred.float()
+    # Case 1: original single-step case
+    if up.shape[-1] == 1:
+        up = up.squeeze(-1)  # (B,S,S,S)
+
+        ut = (up - u0) / dt
+        u_tau = (1.0 - tau) * u0 + tau * up     # (B,S,S,S)
+
+        rhs_tau = pde_rhs(u_tau, dx, config.EPSILON_PARAM)  # (B,S,S,S)
+
+        if normalize:
+            s_t = ut.pow(2).mean((1,2,3), keepdim=True).sqrt().detach() + 1e-8
+            s_r = rhs_tau.pow(2).mean((1,2,3), keepdim=True).sqrt().detach() + 1e-8
+            R = ut / s_t - rhs_tau / s_r
+        else:
+            R = ut - rhs_tau
+
+    # Case 2: multi-step prediction, up: (B,S,S,S,T_out)
+    else:
+        B, Sx, Sy, Sz, T = up.shape
+
+        # Build the chain [u^n, u^{n+1}, ..., u^{n+T}]
+        u0_exp = u0.unsqueeze(-1)                  # (B,Sx,Sy,Sz,1)
+        u_all = torch.cat([u0_exp, up], dim=-1)    # (B,Sx,Sy,Sz,T+1)
+
+        # Differences: u^{k} - u^{k-1} for k=1..T
+        u_prev = u_all[..., :-1]   # (B,Sx,Sy,Sz,T)
+        u_next = u_all[...,  1:]   # (B,Sx,Sy,Sz,T)
+
+        ut = (u_next - u_prev) / dt               # (B,Sx,Sy,Sz,T)
+        u_tau = (1.0 - tau) * u_prev + tau * u_next   # (B,Sx,Sy,Sz,T)
+
+        # Flatten time into batch for pde_rhs
+        u_tau_flat = u_tau.permute(0, 4, 1, 2, 3).reshape(B * T, Sx, Sy, Sz)
+        rhs_tau_flat = pde_rhs(u_tau_flat, dx, config.EPSILON_PARAM)  # (B*T,Sx,Sy,Sz)
+        rhs_tau = rhs_tau_flat.view(B, T, Sx, Sy, Sz).permute(0, 2, 3, 4, 1)
+        # rhs_tau: (B,Sx,Sy,Sz,T)
+
+        if normalize:
+            s_t = ut.pow(2).mean((1,2,3,4), keepdim=True).sqrt().detach() + 1e-8
+            s_r = rhs_tau.pow(2).mean((1,2,3,4), keepdim=True).sqrt().detach() + 1e-8
+            R = ut / s_t - rhs_tau / s_r
+        else:
+            R = ut - rhs_tau
+
     return (R**2).mean().to(u_pred.dtype)
 
 
@@ -114,7 +182,7 @@ def _kx_grid(S, dx, device, dtype):
         torch.arange(-half + 1, 0, device=device)
     ], dim=0).to(dtype)
     return (2.0 * math.pi / L) * kvec  # (S,)
-
+'''''
 def semi_implicit_step_sh(u_in, dt, dx, eps):
     """
     One semi-implicit Swift–Hohenberg step that mirrors your MATLAB:
@@ -150,6 +218,7 @@ def semi_implicit_step_sh(u_in, dt, dx, eps):
     v_hat = s_hat / denom
     up = tfft.ifftn(v_hat, dim=(1,2,3)).real
     return up.unsqueeze(-1)
+'''
 
 def _semi_implicit_step_sh(u_in, dt, dx, eps):
     """
@@ -165,7 +234,7 @@ def _semi_implicit_step_sh(u_in, dt, dx, eps):
     k4 = k2 * k2
 
     u0_hat = torch.fft.fftn(u0, dim=(1,2,3))
-    u3_hat = torch.fft.fftn(u0**3, dim=(1,2,3))  # no dealias (dataset)
+    u3_hat = torch.fft.fftn(u0**3, dim=(1,2,3))  # no dealias (data)
 
     denom  = (1.0/dt) + (1.0 - eps) + k4
     numer  = (1.0/dt) * u0_hat - u3_hat + 2.0 * k2 * u0_hat
@@ -304,7 +373,72 @@ def low_k_mse(u_pred, u_ref, frac=0.45):
     # normalize by # of active modes to keep scale stable across S
     denom = mask.sum().clamp_min(1.0)
     return spec_mse.sum() / denom
+def low_k_mse_T_out(u_pred, u_ref, frac=0.45):
+    """
+    MSE between u_pred and u_ref restricted to low spatial frequencies.
 
+    Supports shapes:
+      - (B,S,S,S)          single-step
+      - (B,S,S,S,1)        single-step with channel
+      - (B,S,S,S,T_out)    multi-step (time/channel last)
+
+    For multi-step, we treat each time slice as an extra batch element
+    (so the loss aggregates over all steps).
+    """
+    up = u_pred
+    ur = u_ref
+
+    # --- ensure 5D with time/channel last ---
+    if up.dim() == 4:
+        up = up.unsqueeze(-1)   # (B,S,S,S,1)
+    if ur.dim() == 4:
+        ur = ur.unsqueeze(-1)
+
+    assert up.dim() == 5 and ur.dim() == 5, "low_k_mse expects 4D or 5D inputs"
+
+    # --- align time dimension ---
+    T_p = up.shape[-1]
+    T_r = ur.shape[-1]
+
+    if T_p != T_r:
+        # broadcast the one-step teacher across time if needed
+        if T_p > 1 and T_r == 1:
+            ur = ur.expand(*ur.shape[:-1], T_p)
+            T_r = T_p
+        elif T_r > 1 and T_p == 1:
+            up = up.expand(*up.shape[:-1], T_r)
+            T_p = T_r
+        else:
+            raise ValueError(f"low_k_mse: incompatible time dims {T_p} vs {T_r}")
+
+    # now up, ur: (B,S,S,S,T) with same T
+    B, S, _, _, T = up.shape
+
+    # flatten time into batch: (B*T,S,S,S,1)
+    up_flat = up.permute(0, 4, 1, 2, 3).reshape(B*T, S, S, S, 1)
+    ur_flat = ur.permute(0, 4, 1, 2, 3).reshape(B*T, S, S, S, 1)
+
+    up4 = up_flat.squeeze(-1).float()  # (B*T,S,S,S)
+    ur4 = ur_flat.squeeze(-1).float()
+
+    # --- original spectral low-k MSE on the flattened batch ---
+    Up = torch.fft.fftn(up4, dim=(1, 2, 3))
+    Ur = torch.fft.fftn(ur4, dim=(1, 2, 3))
+
+    fx = torch.fft.fftfreq(S, d=1.0).to(up4.device)
+    fy = torch.fft.fftfreq(S, d=1.0).to(up4.device)
+    fz = torch.fft.fftfreq(S, d=1.0).to(up4.device)
+    FX, FY, FZ = torch.meshgrid(fx, fy, fz, indexing='ij')
+    r = torch.sqrt(FX*FX + FY*FY + FZ*FZ)
+    rmax = r.max()
+    mask = (r <= frac * rmax).to(Up.real.dtype)
+
+    Dh = Up - Ur
+    spec_mse = (Dh.real**2 + Dh.imag**2) * mask
+
+    # same normalization style as before: by # of active modes only
+    denom = mask.sum().clamp_min(1.0)
+    return spec_mse.sum() / denom
 
 # --- CH projection with mixed chemistry (uses the same MATLAB-matched kernel) ---
 
@@ -440,7 +574,7 @@ def _rhs_ac3d(u, dx, eps2):
 
 def _rhs_mbe3d(u, dx, eps):
     """
-    MBE3D (slope-selection, dataset-consistent):
+    MBE3D (slope-selection, data-consistent):
         u_t = -Δ u  -  eps ∇^4 u  +  ∇·(|∇u|^2 ∇u)
              = -ε Δ^2 u - ∇·((1 - |∇u|^2)∇u)
     """
@@ -459,13 +593,13 @@ def _rhs_pfc3d(u, dx, eps):
     lap_u = laplacian_fourier_3d_phys(u, dx)
     bi_u  = biharmonic(u, dx)
     tri_u = triharmonic(u, dx)
-    # match dataset: NO dealiasing in the cubic
+    # match data: NO dealiasing in the cubic
     lap_u3 = laplacian_fourier_3d_phys(u**3, dx)
     return (1.0 - eps) * lap_u + 2.0 * bi_u + tri_u - lap_u3
 
 def _rhs_sh3d(u, dx, eps):
     """
-    Swift–Hohenberg (dataset-consistent split):
+    Swift–Hohenberg (data-consistent split):
         u_t = (1-ε) u - 2 Δ u - Δ^2 u - u^3
     NOTE:
       • NO dealiasing on u^3 (matches the MATLAB generator).
@@ -487,7 +621,7 @@ def semi_implicit_step_pfc(u_in, dt, dx, eps):
     k2 = _k_spectrum(S, S, S, dx, u0.device)  # (2π/L)^2 |k|^2  >= 0
 
     U0     = torch.fft.fftn(u0,    dim=(1,2,3))
-    U3_hat = torch.fft.fftn(u0**3, dim=(1,2,3))  # no dealias (dataset)
+    U3_hat = torch.fft.fftn(u0**3, dim=(1,2,3))  # no dealias (data)
 
     numer = (1.0/dt) * U0 - k2 * U3_hat + 2.0 * (k2**2) * U0
     denom = (1.0/dt) + (1.0 - eps) * k2 + (k2**3)
@@ -502,7 +636,7 @@ def _scheme_residual_fourier_pfc(u0, up, dt, dx, eps):
     k2 = _k_spectrum(u0.shape[1], u0.shape[2], u0.shape[3], dx, u0.device)
     U0     = torch.fft.fftn(u0,    dim=(1,2,3))
     UP     = torch.fft.fftn(up,    dim=(1,2,3))
-    U3_hat = torch.fft.fftn(u0**3, dim=(1,2,3))    # dataset-consistent (no dealias)
+    U3_hat = torch.fft.fftn(u0**3, dim=(1,2,3))    # data-consistent (no dealias)
 
     denom  = (1.0/dt) + (1.0 - eps)*k2 + (k2**3)
     rhs    = (1.0/dt)*U0 - k2*U3_hat + 2.0*(k2**2)*U0
@@ -611,6 +745,61 @@ def semi_implicit_step(u_in, dt, dx, eps2):
         rhs = pde_rhs(u0, dx, config.EPSILON_PARAM)
         return (u0 + dt * rhs).unsqueeze(-1)
 
+def semi_implicit_step_T_out(u_in, dt, dx, eps2):
+    """
+    AC3D: semi-implicit scheme.
+    - If T_OUT == 1: behaves as before, returns one step u^{n+1}.
+    - If T_OUT > 1 : returns [u^{n+1}, ..., u^{n+T_OUT}] in the last dim.
+
+    Others: explicit Euler teacher (also extended to T_OUT steps).
+    """
+    P = config.PROBLEM
+    T_out = int(getattr(config, "T_OUT", 1))
+
+    # last known state u^n: (B,S,S,S)
+    u0 = u_in.squeeze(-1).float()
+
+    if P == 'AC3D':
+        # original AC3D semi-implicit, extended to multiple steps
+        B, S, _, _ = u0.shape[:4]
+
+        # spectral grid (same for all steps)
+        kx = torch.fft.fftfreq(S, d=dx).to(u0.device)
+        ky = torch.fft.fftfreq(S, d=dx).to(u0.device)
+        kz = torch.fft.fftfreq(S, d=dx).to(u0.device)
+        kx, ky, kz = torch.meshgrid(kx, ky, kz, indexing='ij')
+        k2 = (2 * np.pi) ** 2 * (kx**2 + ky**2 + kz**2)
+        den = (1.0 + dt * k2)
+
+        u_cur = u0
+        steps = []
+        for _ in range(T_out):
+            nl = u_cur**3 - u_cur
+            u0_hat = torch.fft.fftn(u_cur, dim=[1, 2, 3])
+            nl_hat = torch.fft.fftn(nl, dim=[1, 2, 3])
+            num = u0_hat - (dt / eps2) * nl_hat
+            u1_hat = num / den
+            u_next = torch.fft.ifftn(u1_hat, dim=[1, 2, 3]).real  # (B,S,S,S)
+
+            steps.append(u_next)
+            u_cur = u_next
+
+        u_all = torch.stack(steps, dim=-1)  # (B,S,S,S,T_out)
+        return u_all  # for T_out=1, shape is (B,S,S,S,1)
+
+    else:
+        # fallback explicit Euler, extended to multiple steps
+        u_cur = u0
+        steps = []
+        for _ in range(T_out):
+            rhs = pde_rhs(u_cur, dx, config.EPSILON_PARAM)
+            u_next = u_cur + dt * rhs
+            steps.append(u_next)
+            u_cur = u_next
+
+        u_all = torch.stack(steps, dim=-1)  # (B,S,S,S,T_out)
+        return u_all
+
 # -------------------------
 # Energy utilities
 # For AC3D use your original. Otherwise return zero penalty (no-op).
@@ -630,6 +819,118 @@ def energy_penalty(u_in, u_pred, dx, eps2):
     Ep = energy_density(up, dx, eps2).mean(dim=(1,2,3))
     inc = torch.relu(Ep - E0)
     return inc.mean()
+
+
+''''
+def energy_penalty(u_ref, u_pred, dx, eps2):
+    """
+    Match free energy of u_pred to u_ref at each time step.
+
+    u_ref, u_pred shapes:
+        - (B,S,S,S,T)  multi-step
+        - or (B,S,S,S) single-step (then treated as T=1)
+    """
+    if config.PROBLEM not in ('AC3D', 'CH3D'):
+        return torch.zeros((), device=u_pred.device, dtype=u_pred.dtype)
+
+    ur = u_ref
+    up = u_pred
+
+    # unify shapes
+    if ur.dim() == 5 and ur.shape[-1] == 1:
+        ur = ur.squeeze(-1)
+    if up.dim() == 5 and up.shape[-1] == 1:
+        up = up.squeeze(-1)
+
+    # single-step: just L2 on energy
+    if ur.dim() == 4 and up.dim() == 4:
+        E_ref = energy_density(ur, dx, eps2).mean(dim=(1, 2, 3))  # (B,)
+        E_pred = energy_density(up, dx, eps2).mean(dim=(1, 2, 3)) # (B,)
+        return ((E_pred - E_ref)**2).mean()
+
+    # multi-step: (B,S,S,S,T)
+    if ur.dim() == 5 and up.dim() == 5:
+        assert ur.shape == up.shape
+        B, Sx, Sy, Sz, T = ur.shape
+
+        ur_flat = ur.permute(0, 4, 1, 2, 3).reshape(B*T, Sx, Sy, Sz)
+        up_flat = up.permute(0, 4, 1, 2, 3).reshape(B*T, Sx, Sy, Sz)
+
+        E_ref_all = energy_density(ur_flat, dx, eps2).mean(dim=(1, 2, 3))  # (B*T,)
+        E_pred_all = energy_density(up_flat, dx, eps2).mean(dim=(1, 2, 3)) # (B*T,)
+
+        return ((E_pred_all - E_ref_all)**2).mean()
+
+    # fallback
+    E_ref = energy_density(ur, dx, eps2).mean(dim=tuple(range(1, ur.dim())))
+    E_pred = energy_density(up, dx, eps2).mean(dim=tuple(range(1, up.dim())))
+    return ((E_pred - E_ref)**2).mean()
+'''
+
+def energy_penalty_T_out(u_ref, u_pred, dx, eps2):
+    """
+    Match free energy of u_pred to u_ref.
+
+    Supported shapes:
+      - u_ref, u_pred: (B,S,S,S)                 single-step
+      - u_ref, u_pred: (B,S,S,S,T)               multi-step
+      - u_ref: (B,S,S,S),    u_pred: (B,S,S,S,T) baseline vs multi-step
+      - also accepts trailing singleton time dims (B,S,S,S,1).
+    """
+    if config.PROBLEM not in ('AC3D', 'CH3D'):
+        return torch.zeros((), device=u_pred.device, dtype=u_pred.dtype)
+
+    ur = u_ref
+    up = u_pred
+
+    # strip useless trailing singleton time dims
+    if ur.dim() == 5 and ur.shape[-1] == 1:
+        ur = ur.squeeze(-1)
+    if up.dim() == 5 and up.shape[-1] == 1:
+        up = up.squeeze(-1)
+
+    # ---- case 1: both single-step (B,S,S,S) ----
+    if ur.dim() == 4 and up.dim() == 4:
+        E_ref  = energy_density(ur, dx, eps2).mean(dim=(1, 2, 3))  # (B,)
+        E_pred = energy_density(up, dx, eps2).mean(dim=(1, 2, 3))  # (B,)
+        return ((E_pred - E_ref) ** 2).mean()
+
+    # ---- case 2: both multi-step (B,S,S,S,T) ----
+    if ur.dim() == 5 and up.dim() == 5:
+        assert ur.shape == up.shape
+        B, Sx, Sy, Sz, T = ur.shape
+
+        ur_flat = ur.permute(0, 4, 1, 2, 3).reshape(B * T, Sx, Sy, Sz)
+        up_flat = up.permute(0, 4, 1, 2, 3).reshape(B * T, Sx, Sy, Sz)
+
+        E_ref_all  = energy_density(ur_flat, dx, eps2).mean(dim=(1, 2, 3))  # (B*T,)
+        E_pred_all = energy_density(up_flat, dx, eps2).mean(dim=(1, 2, 3))  # (B*T,)
+
+        return ((E_pred_all - E_ref_all) ** 2).mean()
+
+    # ---- case 3: ref single-step, pred multi-step ----
+    if ur.dim() == 4 and up.dim() == 5:
+        B, Sx, Sy, Sz, T = up.shape
+
+        # broadcast u_ref over time steps
+        ur_flat = ur.unsqueeze(1).expand(B, T, Sx, Sy, Sz).reshape(B * T, Sx, Sy, Sz)
+        up_flat = up.permute(0, 4, 1, 2, 3).reshape(B * T, Sx, Sy, Sz)
+
+        E_ref_all  = energy_density(ur_flat, dx, eps2).mean(dim=(1, 2, 3))  # (B*T,)
+        E_pred_all = energy_density(up_flat, dx, eps2).mean(dim=(1, 2, 3))  # (B*T,)
+
+        return ((E_pred_all - E_ref_all) ** 2).mean()
+
+    # ---- case 4: ref multi-step, pred single-step (rare) ----
+    if ur.dim() == 5 and up.dim() == 4:
+        # just swap roles → reuse case 3
+        return energy_penalty(up, ur, dx, eps2)
+
+    # ---- fallback: very unusual shapes, just compare global energies ----
+    E_ref  = energy_density(ur, dx, eps2).mean(dim=tuple(range(1, ur.dim())))
+    E_pred = energy_density(up, dx, eps2).mean(dim=tuple(range(1, up.dim())))
+    return ((E_pred - E_ref) ** 2).mean()
+
 
 def mass_penalty(u_in, u_pred):
     """Penalize change in spatial mean (mass) between steps."""
@@ -707,7 +1008,7 @@ def scheme_residual_fourier(u_in, u_pred):
 
         u0_hat = torch.fft.fftn(u0, dim=(1, 2, 3))
         up_hat = torch.fft.fftn(up, dim=(1, 2, 3))
-        u3_hat = torch.fft.fftn(u0 ** 3, dim=(1, 2, 3))  # dataset-consistent (no dealias)
+        u3_hat = torch.fft.fftn(u0 ** 3, dim=(1, 2, 3))  # data-consistent (no dealias)
 
         eps = config.EPSILON_PARAM
         denom = (1.0 / dt) + (1.0 - eps) + k4
@@ -963,7 +1264,7 @@ def physics_collocation_tau_L2_PFC(u_in, u_pred, tau=0.5 - 1.0/(2.0*math.sqrt(5.
     up = u_pred.squeeze(-1).float()
     ut   = (up - u0) / dt
     u_tau = (1.0 - tau) * u0 + tau * up
-    # RHS that matches dataset (no dealias):
+    # RHS that matches data (no dealias):
     rhs_tau = _rhs_pfc3d(u_tau, dx, eps)
 
     if normalize:
@@ -1178,6 +1479,55 @@ def semi_implicit_step_ch(u_in, dt, dx, eps):
     u1 = torch.fft.ifftn(U1, dim=(1, 2, 3)).real
     return u1.unsqueeze(-1).to(u_in.dtype)
 
+def semi_implicit_step_ch_T_out(u_in, dt, dx, eps):
+    """
+    CORRECTED to exactly match MATLAB:
+        (1 + dt*(2k² + ε²k⁴)) û^{n+1} = û^n - dt*k² * FFT(u^n³ - 3u^n)
+
+    Multi-step extension:
+      - If T_out == 1: original one-step behavior.
+      - If T_out > 1: returns (B,S,S,S,T_out) with T_out semi-implicit steps.
+    """
+    u0 = u_in.squeeze(-1).float()   # (B,S,S,S)
+    B, S, _, _ = u0.shape
+    k2 = _k_spectrum(S, S, S, dx, u0.device)  # (2π/L)²|k|²
+
+    # read T_out from config (support either T_OUT or T_out name)
+    T_out = int(getattr(config, "T_OUT", getattr(config, "T_out", 1)))
+
+    # ---------- single-step: original behavior ----------
+    if T_out <= 1:
+        chem0_hat = torch.fft.fftn(u0 ** 3 - 3.0 * u0, dim=(1, 2, 3))
+        U0 = torch.fft.fftn(u0, dim=(1, 2, 3))
+
+        denom = 1.0 + dt * (2.0 * k2 + (eps ** 2) * (k2 ** 2))
+        numer = U0 - dt * k2 * chem0_hat
+
+        U1 = numer / (denom + 1e-12)
+        u1 = torch.fft.ifftn(U1, dim=(1, 2, 3)).real
+        return u1.unsqueeze(-1).to(u_in.dtype)  # (B,S,S,S,1)
+
+    # ---------- multi-step: iterate T_out times ----------
+    steps = torch.empty(B, S, S, S, T_out, device=u0.device, dtype=u0.dtype)
+    u_curr = u0
+
+    # denom does not depend on u, only on k2
+    denom = 1.0 + dt * (2.0 * k2 + (eps ** 2) * (k2 ** 2))
+
+    for t in range(T_out):
+        chem_hat = torch.fft.fftn(u_curr ** 3 - 3.0 * u_curr, dim=(1, 2, 3))
+        U0 = torch.fft.fftn(u_curr, dim=(1, 2, 3))
+
+        numer = U0 - dt * k2 * chem_hat
+        U1 = numer / (denom + 1e-12)
+        u_next = torch.fft.ifftn(U1, dim=(1, 2, 3)).real
+
+        steps[..., t] = u_next
+        u_curr = u_next
+
+    # (B,S,S,S,T_out), no extra singleton channel, matches TNO output
+    return steps.to(u_in.dtype)
+
 def _rhs_ch3d(u, dx, eps):
     """
     CORRECTED CH3D RHS to match MATLAB generator:
@@ -1220,3 +1570,56 @@ def physics_collocation_tau_L2_CH(u_in, u_pred,
 
     return (R**2).mean().to(u_pred.dtype)
 
+
+def physics_collocation_tau_L2_CH_T_out(u_in, u_pred,
+                                  tau=0.5 - 1.0/(2.0*_m.sqrt(5.0)),
+                                  normalize=True):
+    """
+    CH3D L2 collocation at u_tau (now supports multi-step T_out):
+      R_tau = (u^{n+1}-u^n)/dt - RHS_CH(u_tau)
+    If u_pred has shape (B,S,S,S,T_out), we apply the same formula
+    for each predicted step, broadcasting u^n.
+    """
+    assert config.PROBLEM == 'CH3D'
+    dt, dx, eps = config.DT, config.DX, config.EPSILON_PARAM
+
+    u0 = u_in.squeeze(-1).float()   # (B,S,S,S)
+    up = u_pred.squeeze(-1).float() # (B,S,S,S) or (B,S,S,S,T)
+
+    # ----- single-step (backward compatible) -----
+    if up.dim() == 4:
+        ut   = (up - u0) / dt              # (B,S,S,S)
+        u_tau = (1.0 - tau) * u0 + tau * up
+        rhs_tau = _rhs_ch3d(u_tau, dx, eps)  # (B,S,S,S)
+
+        if normalize:
+            s_t = ut.pow(2).mean((1,2,3), keepdim=True).sqrt().detach() + 1e-8
+            s_r = rhs_tau.pow(2).mean((1,2,3), keepdim=True).sqrt().detach() + 1e-8
+            R = ut / s_t - rhs_tau / s_r
+        else:
+            R = ut - rhs_tau
+        return (R**2).mean().to(u_pred.dtype)
+
+    # ----- multi-step: up: (B,S,S,S,T_out) -----
+    assert up.dim() == 5, "u_pred must be 4D or 5D"
+
+    B, Sx, Sy, Sz, T = up.shape
+    u0_exp = u0.unsqueeze(-1)                  # (B,S,S,S,1)
+
+    ut    = (up - u0_exp) / dt                 # (B,S,S,S,T)
+    u_tau = (1.0 - tau) * u0_exp + tau * up    # (B,S,S,S,T)
+
+    # RHS_CH expects (B,S,S,S), so flatten time into batch:
+    u_tau_flat = u_tau.permute(0,4,1,2,3).reshape(B*T, Sx, Sy, Sz)
+    rhs_flat   = _rhs_ch3d(u_tau_flat, dx, eps)           # (B*T,S,S,S)
+    rhs_tau    = rhs_flat.view(B, T, Sx, Sy, Sz).permute(0,2,3,4,1)  # (B,S,S,S,T)
+
+    if normalize:
+        # normalize over all spatial + time dims
+        s_t = ut.pow(2).mean((1,2,3,4), keepdim=True).sqrt().detach() + 1e-8
+        s_r = rhs_tau.pow(2).mean((1,2,3,4), keepdim=True).sqrt().detach() + 1e-8
+        R = ut / s_t - rhs_tau / s_r
+    else:
+        R = ut - rhs_tau
+
+    return (R**2).mean().to(u_pred.dtype)

@@ -2,7 +2,7 @@ import os  # <- minimal addition
 import torch, numpy as np, random
 import config
 from networks import FNO4d, TNO3d
-from utilities import build_loaders, train_fno_hybrid, evaluate_stats_and_plot #, train_ac_beamstyle, train_ch_beamstyle,train_sh_beamstyle
+from Trainer import build_loaders, train_fno_hybrid, evaluate_stats_and_plot #, train_ac_beamstyle, train_ch_beamstyle,train_sh_beamstyle
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from timeit import default_timer as timer
@@ -22,6 +22,7 @@ def main():
     print('MODEL name is: ', config.MODEL)
     print('Problem is: ', config.PROBLEM)
     print('N_Train is: ', config.N_TRAIN)
+    print('T_out is: ', config.T_OUT)
     print('STEPS_PER_EPOCH is: ', config.STEPS_PER_EPOCH)
     #print('DATA_LOSS_SCALE is: ', config.DATA_LOSS_SCALE)
 
@@ -51,7 +52,7 @@ def main():
             width_q=config.WIDTH_Q,  # width in the projection MLP (q)
             width_h=config.WIDTH_H,  # temporal memory width
             T_in=config.T_IN_CHANNELS,
-            T_out=1,  # one-step output, keeps utilities unchanged
+            T_out= config.T_OUT,      # how many future time frames the network outputs in one forward pass
             n_layers=config.N_LAYERS
         ).to(config.DEVICE)
 
