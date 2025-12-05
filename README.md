@@ -90,7 +90,7 @@ where:
 - **L_data** : data-supervision loss,
 - **L_phys** : physics-guided regularization,
 - **λ ∈ [0,1]** controls the balance (λ = 0.25 for hybrid, λ = 1.0 for pure physics),
-- **α = 1e3** scales the data term.
+- **α = 1e2 or 1e3** scales the data term.
 
 ---
 
