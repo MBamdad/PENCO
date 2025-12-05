@@ -435,11 +435,10 @@ Together, these factors demonstrate PENCO’s efficiency and scalability for lar
 
 If you would like others to cite this work, you can add a BibTeX entry here once the paper is on arXiv or published, for example:
 
+Corresponding Authors:
+Mostafa Bamdad (mostafa.bamdad@uni-weimar.de)
+Mohammad Sadegh Eshaghi (eshaghi.khanghah@iop.uni-hannover.de)
+✅ APA Citation
 ```bibtex
-@article{bamdad2025penco,
-  title   = {PENCO: A Physics–Energy–Numerical–Consistent Operator for 3D Phase Field Modeling},
-  author  = {Bamdad, Mostafa and Eshaghi, Mohammad Sadegh and Anitescu, Cosmin and Valizadeh, Navid and Rabczuk, Timon},
-  journal = arXiv,
-  year    = {2025},
-}
+Bamdad, M., Eshaghi, M. S., Anitescu, C., Valizadeh, N., & Rabczuk, T. (2026). PENCO: A Physics–Energy–Numerical–Consistent Operator for 3D Phase Field Modeling. arXiv. https://doi.org/10.48550/arXiv.2512.04863
 ```
