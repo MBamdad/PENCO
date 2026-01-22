@@ -1,7 +1,7 @@
 import os  # <- minimal addition
 import torch, numpy as np, random
 import config
-from networks import FNO4d, TNO3d
+from networks import FNO4d, TNO3d, FFNO4d, MHNO_FFNO
 from Trainer import build_loaders, train_fno_hybrid, evaluate_stats_and_plot #, train_ac_beamstyle, train_ch_beamstyle,train_sh_beamstyle
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -43,6 +43,34 @@ def main():
             width=config.WIDTH, width_q=config.WIDTH_Q, T_in_channels=config.T_IN_CHANNELS,
             n_layers=config.N_LAYERS
         ).to(device)
+
+    elif config.MODEL == 'FFNO4d':
+        model = FFNO4d(
+            modes=config.MODES,
+            width=config.WIDTH,
+            width_q=config.WIDTH_Q,
+            T_in_channels=config.T_IN_CHANNELS,
+            n_layers=config.N_LAYERS,
+            expansion=config.Expansion,  # start with 2 or 4
+            use_pairwise=True,
+            use_local_conv=True
+        ).to(device)
+
+    elif config.MODEL == 'MHNO_FFNO':
+        model = MHNO_FFNO(
+            modes=config.MODES,
+            width=config.WIDTH,
+            width_q=config.WIDTH_Q,
+            width_h=config.WIDTH_H,
+            T_in=config.T_IN_CHANNELS,
+            T_out=config.T_OUT,
+            n_layers=config.N_LAYERS,
+            expansion=config.Expansion,
+            use_pairwise=True,
+            use_local_conv=True
+        ).to(device)
+
+
     else:
         model = TNO3d(
             modes1=config.MODES,  # spectral modes in x

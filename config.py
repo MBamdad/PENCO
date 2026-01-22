@@ -7,12 +7,12 @@ import torch as _torch
 # ——— Core ———
 SEED = 42
 
-DEVICE = torch.device('cuda:2' if torch.cuda.is_available() else 'cpu')
+DEVICE = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
 # ——— Problem selector ———
 # One of: 'AC3D', 'CH3D', 'SH3D', 'MBE3D', 'PFC3D'
-PROBLEM = 'PFC3D'   # <- set here when you want Swift–Hohenberg
+PROBLEM = 'SH3D'   # <- set here when you want Swift–Hohenberg
 # ——— Model ———
-MODEL = 'FNO4d'  # 'TNO3d' or 'FNO4d'
+MODEL = 'FFNO4d'  # 'TNO3d' or 'FNO4d', 'FFNO4d', 'MHNO_FFNO'
 
 PROBLEM_SPECS = {
     'AC3D': dict(
@@ -126,17 +126,32 @@ TEST_PICK = 1       # 0 spherical   # only used if TEST_MODE == 'manual'
 PURE_PHYSICS_USE_ALL = True    # <- when PDE_WEIGHT==1.0, ignore N_TRAIN for train
 
 
-MODES = 10 # 12  # Or whatever value was used during training
-WIDTH = 10 # 12 # This is the most likely one to change
+if MODEL in ('FFNO4d', 'MHNO_FFNO'):
+    MODES = 12  # 10 # 10 # 12  # Or whatever value was used during training
+    WIDTH = 12  # 10 # 12 # This is the most likely one to change
+else:
+    MODES = 10  # 10 # 12  # Or whatever value was used during training
+    WIDTH = 10  # 10 # 12 # This is the most likely one to change
 
-if PROBLEM == 'MBE3D': # old
+if PROBLEM == 'MBE3D':
     WIDTH_Q = 11
     WIDTH_H = 11
 else:
     WIDTH_Q = 10
     WIDTH_H = 10
 
-N_LAYERS = 2
+if MODEL in ('FFNO4d', 'MHNO_FNO'):
+    N_LAYERS = 4  # 2
+else:
+    N_LAYERS = 2
+
+
+if PROBLEM == 'AC3D':
+    Expansion = 2
+elif PROBLEM == 'CH3D':
+    Expansion = 6
+else:
+    Expansion = 2
 
 # ——— Training ———
 if PROBLEM == 'SH3D': # old
@@ -155,9 +170,9 @@ T_OUT = 1 # determines how much future the model predicts
 
 
 WEIGHT_DECAY = 1e-5
-PDE_WEIGHT = 0.25
+PDE_WEIGHT = 0.0
 
-N_TRAIN = 200
+N_TRAIN = 50
 N_TEST = max(1, N_TRAIN // 4)
 
 # ——— Debug print scaling ———

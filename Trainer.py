@@ -22,7 +22,7 @@ from functions import (
     semi_implicit_step_mbe,
     physics_collocation_tau_L2_MBE, mass_project_pred,
     energy_penalty_mbe,
-    # ---- CH additions ----
+    # ---- CH3D additions ----
     semi_implicit_step_ch,
     physics_collocation_tau_L2_CH,
     physics_collocation_tau_L2_AC,
@@ -320,7 +320,7 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
                 w_scheme = 0.32 - 0.12 * epoch_frac
                 w_lowk = 0.25 + 0.70 * (epoch_frac ** 2)
 
-                # --- forward (CH: hard mass projection to enforce invariance) ---
+                # --- forward (CH3D: hard mass projection to enforce invariance) ---
                 y_pred = model(x)
                 y_hat = y_pred # mass_project_pred(y_pred, u_in_last)
 
@@ -331,12 +331,12 @@ def train_fno_hybrid(model, train_loader, test_loader, optimizer, scheduler, dev
                 l_tau2 = physics_collocation_tau_L2_CH(u_in_last, y_hat, tau=(0.5 + tau_off))
                 l_mid_norm = 0.5 * (l_tau1 + l_tau2)
 
-                # --- teacher consistency (CH semi-implicit), with PGU on step-2 ---
+                # --- teacher consistency (CH3D semi-implicit), with PGU on step-2 ---
                 u_si1 = semi_implicit_step_ch(u_in_last, config.DT, config.DX, config.EPSILON_PARAM)
                 loss_scheme1 = F.mse_loss(y_hat, u_si1)
                 loss_scheme = w_scheme * ( loss_scheme1)
 
-                # --- spectral low-k anchor (a bit stronger for CH) ---
+                # --- spectral low-k anchor (a bit stronger for CH3D) ---
                 l_lowk = low_k_mse(y_hat, u_si1, frac=0.50)
 
                 loss_phys = 1e-3 * ( l_mid_norm + w_lowk *  l_lowk)
